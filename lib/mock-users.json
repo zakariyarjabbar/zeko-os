@@ -1,0 +1,23 @@
+[
+  {
+    "id": "u001",
+    "email": "admin@zeko.os",
+    "password": "Admin@1234",
+    "name": "Admin",
+    "role": "admin"
+  },
+  {
+    "id": "u002",
+    "email": "operator@zeko.os",
+    "password": "Operator@1234",
+    "name": "Operator",
+    "role": "operator"
+  },
+  {
+    "id": "u003",
+    "email": "dev@zeko.os",
+    "password": "Dev@1234",
+    "name": "Dev",
+    "role": "developer"
+  }
+]
