@@ -1,12 +1,26 @@
 // components/system/chat/ChatSidebar.tsx
 // Left panel: encrypted channels list + direct messages.
+// Channels are passed as props (fetched from Supabase in the page).
+// DMs are still static for now — Phase 4 when needed.
 
 "use client";
 
 import { cn } from "@/lib/utils";
-import { CHANNELS, DM_USERS, type Channel, type DMUser } from "./mock-data";
+import { type Channel } from "./types";
 
-// ─── Status dot ───────────────────────────────────────────────
+// ─── Static DM type (not yet in DB) ──────────────────────────
+interface DMUser {
+  id:     string;
+  handle: string;
+  status: "online" | "away" | "offline";
+  unread: number;
+}
+
+const DM_USERS: DMUser[] = [
+  { id: "dm-nova",   handle: "n.cross",   status: "online", unread: 0 },
+  { id: "dm-cipher", handle: "c.wraight", status: "away",   unread: 0 },
+];
+
 const STATUS_COLOR: Record<DMUser["status"], string> = {
   online:  "bg-zk-green shadow-glow-sm",
   away:    "bg-zk-amber",
@@ -15,8 +29,9 @@ const STATUS_COLOR: Record<DMUser["status"], string> = {
 
 // ─── Props ────────────────────────────────────────────────────
 interface ChatSidebarProps {
+  channels:      Channel[];
   activeChannel: string;
-  onSelect: (id: string) => void;
+  onSelect:      (id: string) => void;
 }
 
 // ─── Section label ────────────────────────────────────────────
@@ -32,13 +47,9 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 // ─── Channel row ──────────────────────────────────────────────
 function ChannelRow({
-  channel,
-  active,
-  onSelect,
+  channel, active, onSelect,
 }: {
-  channel: Channel;
-  active: boolean;
-  onSelect: () => void;
+  channel: Channel; active: boolean; onSelect: () => void;
 }) {
   return (
     <button
@@ -63,13 +74,9 @@ function ChannelRow({
 
 // ─── DM row ───────────────────────────────────────────────────
 function DMRow({
-  user,
-  active,
-  onSelect,
+  user, active, onSelect,
 }: {
-  user: DMUser;
-  active: boolean;
-  onSelect: () => void;
+  user: DMUser; active: boolean; onSelect: () => void;
 }) {
   return (
     <button
@@ -82,14 +89,7 @@ function DMRow({
           : "text-zk-slate border-l-2 border-transparent hover:text-zk-white hover:bg-zk-green/5"
       )}
     >
-      {/* Status dot */}
-      <span
-        className={cn(
-          "w-1.5 h-1.5 rounded-full shrink-0",
-          STATUS_COLOR[user.status]
-        )}
-        aria-hidden="true"
-      />
+      <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", STATUS_COLOR[user.status])} aria-hidden="true" />
       <span className="truncate flex-1">{user.handle}</span>
       {user.unread > 0 && !active && (
         <span className="shrink-0 font-mono text-[9px] text-zk-bg bg-zk-green rounded-sm px-1 leading-4">
@@ -101,7 +101,7 @@ function DMRow({
 }
 
 // ─── Component ────────────────────────────────────────────────
-export function ChatSidebar({ activeChannel, onSelect }: ChatSidebarProps) {
+export function ChatSidebar({ channels, activeChannel, onSelect }: ChatSidebarProps) {
   return (
     <aside className="w-56 shrink-0 flex flex-col border-r border-zk-border bg-zk-surface/40 overflow-y-auto">
 
@@ -115,7 +115,7 @@ export function ChatSidebar({ activeChannel, onSelect }: ChatSidebarProps) {
       {/* ── Channels ───────────────────────────────────────── */}
       <SectionLabel>Encrypted Channels</SectionLabel>
       <div className="flex flex-col gap-0.5 px-1">
-        {CHANNELS.map((ch) => (
+        {channels.map((ch) => (
           <ChannelRow
             key={ch.id}
             channel={ch}

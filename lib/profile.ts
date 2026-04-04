@@ -1,73 +1,82 @@
 // lib/profile.ts
-// UserProfile interface and mock profile builder.
-// buildProfile() takes the SessionPayload already in the cookie and
-// enriches it with display-layer fields. When a real DB exists,
-// only this function needs to change — the UI stays the same.
+// UserProfile interface and DB-backed profile builder.
 
 import { type SessionPayload } from "./auth";
+import { supabaseAdmin } from "./supabase/server";
+import { type SessionStatus } from "./types/user";
 
 // ─── Interface ────────────────────────────────────────────────
 export interface UserProfile {
-  id:             string;
-  email:          string;
-  name:           string;
-  alias:          string;
-  role:           string;
-  clearanceLevel: string;
-  department:     string;
-  nodeAssignment: string;
-  accessFlags:    string[];
-  sessionStart:   number;   // Unix ms — used to compute live uptime
+  id:            string;
+  displayId:     string;
+  email:         string;
+  username:      string;
+  firstName:     string;
+  lastName:      string;
+  role:          string;
+  alias:         string;
+  department:    string;
+  accessFlags:   string[];
+  sessionStatus: SessionStatus;
+  lastLoginIp:   string;
+  lastActive:    string;
+  sessionStart:  number;
 }
 
-// ─── Mock enrichment table ────────────────────────────────────
-// Keyed by user ID. Provides the fields that don't come from auth.
-const PROFILE_ENRICHMENT: Record<string, Omit<UserProfile,
-  "id" | "email" | "name" | "role" | "sessionStart"
->> = {
-  u001: {
-    alias:          "zeko",
-    clearanceLevel: "LEVEL-5 / SOVEREIGN",
-    department:     "Core Systems",
-    nodeAssignment: "NODE-ALPHA-01",
-    accessFlags:    ["ROOT", "DEPLOY", "AUDIT", "KEY_ROTATE", "THREAT_OPS"],
-  },
-  u002: {
-    alias:          "n.cross",
-    clearanceLevel: "LEVEL-3 / ELEVATED",
-    department:     "Operations",
-    nodeAssignment: "NODE-BETA-03",
-    accessFlags:    ["DEPLOY", "AUDIT", "MONITOR"],
-  },
-  u003: {
-    alias:          "c.wraight",
-    clearanceLevel: "LEVEL-2 / STANDARD",
-    department:     "Engineering",
-    nodeAssignment: "NODE-DEV-07",
-    accessFlags:    ["DEPLOY", "READ_LOGS"],
-  },
-};
+// ─── DB row type ──────────────────────────────────────────────
+interface ProfileRow {
+  display_id:     string;
+  username:       string;
+  first_name:     string;
+  last_name:      string;
+  alias:          string;
+  department:     string;
+  access_flags:   string[];
+  session_status: string;
+  last_login_ip:  string;
+  last_active:    string;
+}
 
-// Fallback for unknown IDs
-const DEFAULT_ENRICHMENT: Omit<UserProfile,
-  "id" | "email" | "name" | "role" | "sessionStart"
-> = {
+// ─── Defaults ─────────────────────────────────────────────────
+const DEFAULT: ProfileRow = {
+  display_id:     "user-0",
+  username:       "unknown",
+  first_name:     "",
+  last_name:      "",
   alias:          "unknown",
-  clearanceLevel: "LEVEL-1 / RESTRICTED",
   department:     "Unassigned",
-  nodeAssignment: "NODE-UNKNOWN",
-  accessFlags:    ["READ_LOGS"],
+  access_flags:   ["READ_LOGS"],
+  session_status: "OFFLINE",
+  last_login_ip:  "0.0.0.0",
+  last_active:    new Date().toISOString(),
 };
 
 // ─── Builder ──────────────────────────────────────────────────
-export function buildProfile(session: SessionPayload): UserProfile {
-  const enrichment = PROFILE_ENRICHMENT[session.id] ?? DEFAULT_ENRICHMENT;
+export async function buildProfile(session: SessionPayload): Promise<UserProfile> {
+  const { data } = await supabaseAdmin
+    .from("profiles")
+    .select(
+      "display_id, username, first_name, last_name, alias, department, access_flags, session_status, last_login_ip, last_active"
+    )
+    .eq("id", session.id)
+    .single();
+
+  const row = (data as ProfileRow | null) ?? DEFAULT;
+
   return {
-    id:           session.id,
-    email:        session.email,
-    name:         session.name,
-    role:         session.role.toUpperCase(),
-    sessionStart: Date.now(),
-    ...enrichment,
+    id:            session.id,
+    displayId:     row.display_id,
+    email:         session.email,
+    username:      row.username,
+    firstName:     row.first_name,
+    lastName:      row.last_name,
+    role:          session.role.toUpperCase(),
+    alias:         row.alias,
+    department:    row.department,
+    accessFlags:   row.access_flags,
+    sessionStatus: (row.session_status as SessionStatus) ?? "OFFLINE",
+    lastLoginIp:   row.last_login_ip,
+    lastActive:    row.last_active,
+    sessionStart:  Date.now(),
   };
 }

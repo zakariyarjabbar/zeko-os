@@ -6,7 +6,7 @@
 
 import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
-import { type ChatMessage } from "./mock-data";
+import { type ChatMessage } from "./types";
 
 interface MessageLogProps {
   messages: ChatMessage[];

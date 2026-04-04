@@ -1,20 +1,20 @@
 // components/system/ProfileDrawer.tsx
-// Slide-out identity matrix drawer from the right edge.
-// Framer Motion: slides in from x:100% with a backdrop overlay.
+// Slide-out identity drawer — shows display ID, identity block,
+// session data, and access flags.
 
 "use client";
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ShieldCheck, LogOut, Terminal } from "lucide-react";
+import { X, LogOut, Terminal, Wifi, WifiOff, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { type UserProfile } from "@/lib/profile";
 
 interface ProfileDrawerProps {
-  open:     boolean;
-  profile:  UserProfile;
-  onClose:  () => void;
+  open:    boolean;
+  profile: UserProfile;
+  onClose: () => void;
 }
 
 // ─── Live session uptime ──────────────────────────────────────
@@ -23,9 +23,10 @@ function useUptime(startMs: number) {
 
   useEffect(() => {
     setElapsed(Math.floor((Date.now() - startMs) / 1000));
-    const id = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startMs) / 1000));
-    }, 1000);
+    const id = setInterval(
+      () => setElapsed(Math.floor((Date.now() - startMs) / 1000)),
+      1000
+    );
     return () => clearInterval(id);
   }, [startMs]);
 
@@ -35,30 +36,65 @@ function useUptime(startMs: number) {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+// ─── Status indicator ─────────────────────────────────────────
+const STATUS_CONFIG = {
+  ONLINE:  { color: "bg-zk-green shadow-glow-sm", label: "ONLINE",  icon: Wifi },
+  AWAY:    { color: "bg-zk-amber",                label: "AWAY",    icon: Clock },
+  OFFLINE: { color: "bg-zk-muted/40",             label: "OFFLINE", icon: WifiOff },
+} as const;
+
 // ─── Data row ─────────────────────────────────────────────────
-function DataRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function DataRow({
+  label,
+  value,
+  accent = false,
+  mono = true,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+  mono?: boolean;
+}) {
   return (
     <div className="flex items-start justify-between gap-4 py-2 border-b border-zk-border/40 last:border-0">
       <span className="font-mono text-[10px] text-zk-muted/60 tracking-widest uppercase shrink-0">
         {label}
       </span>
-      <span className={cn(
-        "font-mono text-[11px] text-right break-all",
-        accent ? "text-zk-green" : "text-zk-slate"
-      )}>
+      <span
+        className={cn(
+          "text-[11px] text-right break-all",
+          mono ? "font-mono" : "font-sans",
+          accent ? "text-zk-green" : "text-zk-slate"
+        )}
+      >
         {value}
       </span>
     </div>
   );
 }
 
+// ─── Section header ───────────────────────────────────────────
+function SectionHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="font-mono text-[9px] text-zk-muted/40 tracking-[0.2em] uppercase mb-3">
+      // {children}
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────
 export function ProfileDrawer({ open, profile, onClose }: ProfileDrawerProps) {
-  const router     = useRouter();
-  const uptime     = useUptime(profile.sessionStart);
+  const router = useRouter();
+  const uptime = useUptime(profile.sessionStart);
   const [terminating, setTerminating] = useState(false);
 
-  // Lock body scroll while drawer is open
+  const status     = STATUS_CONFIG[profile.sessionStatus] ?? STATUS_CONFIG.OFFLINE;
+  const fullName   = [profile.firstName, profile.lastName].filter(Boolean).join(" ") || profile.username;
+  const initial    = (profile.firstName || profile.username).charAt(0).toUpperCase();
+  const lastActive = new Date(profile.lastActive).toLocaleTimeString([], {
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  });
+
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
@@ -70,13 +106,11 @@ export function ProfileDrawer({ open, profile, onClose }: ProfileDrawerProps) {
     router.push("/login");
   }
 
-  const initial = profile.name.charAt(0).toUpperCase();
-
   return (
     <AnimatePresence>
       {open && (
         <>
-          {/* ── Backdrop ──────────────────────────────────── */}
+          {/* Backdrop */}
           <motion.div
             key="backdrop"
             initial={{ opacity: 0 }}
@@ -88,7 +122,7 @@ export function ProfileDrawer({ open, profile, onClose }: ProfileDrawerProps) {
             aria-hidden="true"
           />
 
-          {/* ── Drawer ────────────────────────────────────── */}
+          {/* Drawer */}
           <motion.div
             key="drawer"
             initial={{ x: "100%" }}
@@ -100,10 +134,10 @@ export function ProfileDrawer({ open, profile, onClose }: ProfileDrawerProps) {
               "flex flex-col",
               "bg-[rgba(10,15,10,0.98)] backdrop-blur-[20px]",
               "border-l border-zk-border",
-              "shadow-[-8px_0_40px_rgba(0,0,0,0.7)]",
+              "shadow-[-8px_0_40px_rgba(0,0,0,0.7)]"
             )}
           >
-            {/* ── Header ──────────────────────────────────── */}
+            {/* Header */}
             <div className="flex items-center justify-between px-5 py-3 border-b border-zk-border shrink-0">
               <div className="flex items-center gap-2">
                 <Terminal size={13} className="text-zk-green" />
@@ -120,59 +154,85 @@ export function ProfileDrawer({ open, profile, onClose }: ProfileDrawerProps) {
               </button>
             </div>
 
-            {/* ── Scrollable body ──────────────────────────── */}
+            {/* Scrollable body */}
             <div className="flex-1 overflow-y-auto">
 
-              {/* Avatar block */}
+              {/* ── Avatar block ──────────────────────────── */}
               <div className="flex flex-col items-center gap-3 px-5 py-8 border-b border-zk-border/50">
-                {/* Glowing initial box */}
+                {/* Glowing initial */}
                 <div className={cn(
-                  "w-16 h-16 rounded-sm flex items-center justify-center",
+                  "w-16 h-16 rounded-sm flex items-center justify-center relative",
                   "border border-zk-green/40 bg-zk-green/8",
-                  "shadow-[0_0_24px_rgba(0,255,65,0.2),inset_0_0_12px_rgba(0,255,65,0.05)]",
+                  "shadow-[0_0_24px_rgba(0,255,65,0.2),inset_0_0_12px_rgba(0,255,65,0.05)]"
                 )}>
                   <span className="font-mono text-2xl font-bold text-zk-green text-glow select-none">
                     {initial}
                   </span>
+                  {/* Status dot on avatar */}
+                  <span
+                    className={cn(
+                      "absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-[rgba(10,15,10,0.98)]",
+                      status.color
+                    )}
+                    aria-hidden="true"
+                  />
                 </div>
 
-                {/* Name + alias */}
+                {/* Name + username + display ID */}
                 <div className="text-center space-y-0.5">
                   <div className="font-mono text-sm font-semibold text-zk-white tracking-wide">
-                    {profile.name}
+                    {fullName}
                   </div>
                   <div className="font-mono text-[11px] text-zk-green/70">
-                    @{profile.alias}
+                    @{profile.username}
+                  </div>
+                  {/* Display ID badge */}
+                  <div className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-sm border border-zk-green/20 bg-zk-green/5">
+                    <span className="font-mono text-[10px] text-zk-green tracking-widest">
+                      {profile.displayId}
+                    </span>
                   </div>
                 </div>
 
-                {/* Clearance badge */}
-                <div className="flex items-center gap-1.5 px-3 py-1 rounded-sm border border-zk-green/20 bg-zk-green/5">
-                  <ShieldCheck size={11} className="text-zk-green" />
-                  <span className="font-mono text-[9px] text-zk-green tracking-widest">
-                    {profile.clearanceLevel}
+
+              </div>
+
+              {/* ── Identity block ────────────────────────── */}
+              <div className="px-5 py-4 border-b border-zk-border/50">
+                <SectionHeader>Identity</SectionHeader>
+                <DataRow label="Display ID" value={profile.displayId}  accent />
+                <DataRow label="Username"   value={profile.username}   accent />
+                <DataRow label="Email"      value={profile.email}              />
+                <DataRow label="Role"       value={profile.role}       accent />
+                <DataRow label="Dept"       value={profile.department}         />
+
+              </div>
+
+              {/* ── Session block ─────────────────────────── */}
+              <div className="px-5 py-4 border-b border-zk-border/50">
+                <SectionHeader>Session</SectionHeader>
+
+                {/* Status row — special treatment */}
+                <div className="flex items-center justify-between gap-4 py-2 border-b border-zk-border/40">
+                  <span className="font-mono text-[10px] text-zk-muted/60 tracking-widest uppercase">
+                    Status
                   </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={cn("w-1.5 h-1.5 rounded-full", status.color)} />
+                    <span className="font-mono text-[11px] text-zk-green">
+                      {status.label}
+                    </span>
+                  </div>
                 </div>
+
+                <DataRow label="Uptime"      value={uptime}              accent />
+                <DataRow label="Last Active" value={lastActive}                  />
+                <DataRow label="Last IP"     value={profile.lastLoginIp} accent />
               </div>
 
-              {/* Data rows */}
-              <div className="px-5 py-4 border-b border-zk-border/50 space-y-0">
-                <div className="font-mono text-[9px] text-zk-muted/40 tracking-[0.2em] uppercase mb-3">
-                  // Session Data
-                </div>
-                <DataRow label="UID"      value={profile.id}             accent />
-                <DataRow label="Email"    value={profile.email}                  />
-                <DataRow label="Role"     value={profile.role}           accent />
-                <DataRow label="Dept"     value={profile.department}             />
-                <DataRow label="Node"     value={profile.nodeAssignment} accent />
-                <DataRow label="Uptime"   value={uptime}                 accent />
-              </div>
-
-              {/* Access flags */}
+              {/* ── Access flags ──────────────────────────── */}
               <div className="px-5 py-4">
-                <div className="font-mono text-[9px] text-zk-muted/40 tracking-[0.2em] uppercase mb-3">
-                  // Access Flags
-                </div>
+                <SectionHeader>Access Flags</SectionHeader>
                 <div className="flex flex-wrap gap-1.5">
                   {profile.accessFlags.map((flag) => (
                     <span
@@ -186,7 +246,7 @@ export function ProfileDrawer({ open, profile, onClose }: ProfileDrawerProps) {
               </div>
             </div>
 
-            {/* ── Footer: terminate session ─────────────────── */}
+            {/* Footer */}
             <div className="shrink-0 px-5 py-4 border-t border-zk-border">
               <button
                 onClick={handleTerminate}

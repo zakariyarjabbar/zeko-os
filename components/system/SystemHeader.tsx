@@ -5,13 +5,13 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { Bell, Settings, User, LogOut } from "lucide-react";
 import { AlertsPanel }   from "./AlertsPanel";
 import { ProfileDrawer } from "./ProfileDrawer";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { buildProfile } from "@/lib/profile";
+import { type UserProfile } from "@/lib/profile";
 import { type SessionPayload } from "@/lib/auth";
 
 // ─── Alert data ───────────────────────────────────────────────
@@ -36,9 +36,9 @@ const INITIAL_ALERTS: SystemAlert[] = [
 ];
 
 // ─── Props ────────────────────────────────────────────────────
-// Extend to include full session so we can build the profile client-side
 interface SystemHeaderProps {
   session: SessionPayload;
+  profile: UserProfile;
 }
 
 // ─── Icon button helper ───────────────────────────────────────
@@ -79,15 +79,12 @@ function IconBtn({
 }
 
 // ─── Component ────────────────────────────────────────────────
-export function SystemHeader({ session }: SystemHeaderProps) {
+export function SystemHeader({ session, profile }: SystemHeaderProps) {
   const router = useRouter();
   const [loggingOut, setLoggingOut]   = useState(false);
   const [alertsOpen, setAlertsOpen]   = useState(false);
   const [alerts, setAlerts]           = useState<SystemAlert[]>(INITIAL_ALERTS);
   const [profileOpen, setProfileOpen] = useState(false);
-
-  // Build enriched profile once per session mount
-  const profile = useMemo(() => buildProfile(session), [session]);
 
   async function handleLogout() {
     setLoggingOut(true);

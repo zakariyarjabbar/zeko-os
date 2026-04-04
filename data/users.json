@@ -1,0 +1,50 @@
+[
+  {
+    "id": "supabase-uuid-placeholder",
+    "displayId": "root-1",
+    "identity": {
+      "username":    "zeko",
+      "firstName":   "Zakariya",
+      "lastName":    "Jabbar",
+      "email":       "admin@zeko.os",
+      "permissions": ["ROOT_ACCESS", "SYS_ADMIN", "BYPASS_SECURITY", "KEY_ROTATE", "THREAT_OPS"]
+    },
+    "session": {
+      "status":      "ONLINE",
+      "lastLoginIp": "192.168.1.104",
+      "lastActive":  "2026-04-04T07:16:08Z"
+    }
+  },
+  {
+    "id": "supabase-uuid-placeholder",
+    "displayId": "operator-1",
+    "identity": {
+      "username":    "n.cross",
+      "firstName":   "Nova",
+      "lastName":    "Cross",
+      "email":       "operator@zeko.os",
+      "permissions": ["DEPLOY", "AUDIT", "MONITOR"]
+    },
+    "session": {
+      "status":      "ONLINE",
+      "lastLoginIp": "192.168.1.112",
+      "lastActive":  "2026-04-04T06:55:00Z"
+    }
+  },
+  {
+    "id": "supabase-uuid-placeholder",
+    "displayId": "dev-1",
+    "identity": {
+      "username":    "c.wraight",
+      "firstName":   "Cipher",
+      "lastName":    "Wraight",
+      "email":       "dev@zeko.os",
+      "permissions": ["DEPLOY", "READ_LOGS"]
+    },
+    "session": {
+      "status":      "AWAY",
+      "lastLoginIp": "192.168.1.99",
+      "lastActive":  "2026-04-04T05:30:00Z"
+    }
+  }
+]

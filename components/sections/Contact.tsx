@@ -88,8 +88,21 @@ export function Contact() {
     if (!validate()) return;
 
     setStatus("loading");
-    await new Promise((r) => setTimeout(r, 1800));
-    setStatus("success");
+    try {
+      const res = await fetch("/api/contact", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(formData),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "Unknown error");
+      }
+      setStatus("success");
+    } catch (err) {
+      console.error("[contact]", err);
+      setStatus("error");
+    }
   };
 
   return (
