@@ -1,7 +1,7 @@
 // app/api/chat/channels/route.ts
 // GET /api/chat/channels
-// Returns all channels. Uses admin client — bypasses RLS.
-// Protected by session cookie check.
+// Returns channels filtered to ones the user can view,
+// with their available permission keys.
 
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
@@ -11,12 +11,48 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data, error } = await supabaseAdmin
+  // Get user flags
+  const { data: profileData } = await supabaseAdmin
+    .from("profiles")
+    .select("access_flags")
+    .eq("id", session.id)
+    .single();
+
+  const userFlags: string[] = (profileData as { access_flags: string[] } | null)?.access_flags ?? [];
+  const isAdmin = userFlags.includes("Administrator");
+
+  const { data: channels, error } = await supabaseAdmin
     .from("channels")
     .select("id, label, topic, member_count")
     .order("created_at", { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json(data ?? []);
+  // Fetch all channel_permissions
+  const { data: perms } = await supabaseAdmin
+    .from("channel_permissions")
+    .select("channel_id, permission");
+
+  const permMap: Record<string, string[]> = {};
+  (perms ?? []).forEach((p: { channel_id: string; permission: string }) => {
+    permMap[p.channel_id] = [...(permMap[p.channel_id] ?? []), p.permission];
+  });
+
+  const result = (channels ?? []).map((c) => {
+    const chPerms = permMap[c.id] ?? [];
+    // Which permissions does this user have for this channel?
+    const userChPerms = isAdmin
+      ? chPerms  // admin has all
+      : chPerms.filter((p) => userFlags.includes(p));
+
+    return {
+      id:          c.id,
+      label:       c.label,
+      topic:       c.topic,
+      memberCount: c.member_count,
+      permissions: userChPerms,
+    };
+  });
+
+  return NextResponse.json(result);
 }

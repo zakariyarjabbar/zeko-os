@@ -1,8 +1,8 @@
 // app/api/roles/[id]/route.ts
-// GET    /api/roles/:id         — get role + assigned users
-// PATCH  /api/roles/:id         — update role
-// DELETE /api/roles/:id         — delete role
-// All require ROOT_ACCESS.
+// GET    /api/roles/:id  — role detail + assigned users
+// PATCH  /api/roles/:id  — update role
+// DELETE /api/roles/:id  — delete role
+// All require Administrator.
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireFounder } from "@/lib/require-founder";
@@ -25,17 +25,35 @@ export async function GET(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 404 });
 
-  // Get assigned users via junction table
+  // ── Get assigned users ─────────────────────────────────────
+  // user_roles FK points to auth.users, not profiles — do two queries.
   const { data: userRoles } = await supabaseAdmin
     .from("user_roles")
-    .select("user_id, profiles(id, display_id, username, first_name, last_name, session_status)")
+    .select("user_id")
     .eq("role_id", id);
 
-  const users = (userRoles ?? [])
-    .map((ur: { user_id: string; profiles: unknown }) => ur.profiles)
-    .filter(Boolean);
+  const userIds = (userRoles ?? []).map((ur: { user_id: string }) => ur.user_id);
 
-  return NextResponse.json({ ...role, users });
+  let users: unknown[] = [];
+  if (userIds.length > 0) {
+    const { data: profiles } = await supabaseAdmin
+      .from("profiles")
+      .select("id, display_id, username, first_name, last_name, session_status")
+      .in("id", userIds);
+    users = profiles ?? [];
+  }
+
+  // ── Sanitise permissions ───────────────────────────────────
+  // Only keep permission names that exist in the permissions table.
+  const { data: validPerms } = await supabaseAdmin
+    .from("permissions")
+    .select("name");
+
+  const validNames = new Set((validPerms ?? []).map((p: { name: string }) => p.name));
+  const r = role as { id: string; name: string; description: string; permissions: string[]; created_at: string };
+  const cleanPermissions = (r.permissions ?? []).filter((p) => validNames.has(p));
+
+  return NextResponse.json({ ...r, permissions: cleanPermissions, users });
 }
 
 export async function PATCH(
@@ -79,17 +97,9 @@ export async function DELETE(
 
   const { id } = await params;
 
-  // Unassign all users (cascade handles it but be explicit)
-  await supabaseAdmin
-    .from("user_roles")
-    .delete()
-    .eq("role_id", id);
+  await supabaseAdmin.from("user_roles").delete().eq("role_id", id);
 
-  const { error } = await supabaseAdmin
-    .from("roles")
-    .delete()
-    .eq("id", id);
-
+  const { error } = await supabaseAdmin.from("roles").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ ok: true });
