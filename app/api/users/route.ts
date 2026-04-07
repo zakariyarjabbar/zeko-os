@@ -1,15 +1,21 @@
 // app/api/users/route.ts
-// GET  /api/users — list all users with profiles + assigned roles
-// POST /api/users — create a new user
-// Both require Administrator.
+// GET  /api/users — list users  (moderator | admin | Administrator)
+// POST /api/users — create user (admin | Administrator)
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireFounder } from "@/lib/require-founder";
+import { getSession } from "@/lib/auth";
+import { getEffectiveFlags } from "@/lib/effective-flags";
+import { canViewUsers, canCreateUsers } from "@/lib/permissions";
 import { supabaseAdmin } from "@/lib/supabase/server";
 
 export async function GET() {
-  const guard = await requireFounder();
-  if (!guard.ok) return guard.error as unknown as NextResponse;
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const flags = await getEffectiveFlags(session.id);
+  if (!canViewUsers(flags)) {
+    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  }
 
   const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers();
   if (authError) return NextResponse.json({ error: authError.message }, { status: 500 });
@@ -18,12 +24,10 @@ export async function GET() {
     .from("profiles")
     .select("id, display_id, username, first_name, last_name, alias, department, access_flags, session_status");
 
-  // Fetch all user_roles with role names
   const { data: userRoles } = await supabaseAdmin
     .from("user_roles")
     .select("user_id, role_id, roles(id, name)");
 
-  // Build role map: userId → Role[]
   const roleMap = new Map<string, { id: string; name: string }[]>();
   (userRoles ?? []).forEach((ur: { user_id: string; role_id: string; roles: unknown }) => {
     const role = ur.roles as { id: string; name: string } | null;
@@ -52,8 +56,13 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const guard = await requireFounder();
-  if (!guard.ok) return guard.error as unknown as NextResponse;
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const flags = await getEffectiveFlags(session.id);
+  if (!canCreateUsers(flags)) {
+    return NextResponse.json({ error: "Forbidden. admin or Administrator permission required." }, { status: 403 });
+  }
 
   let body: {
     email?:       string;
@@ -96,13 +105,13 @@ export async function POST(req: NextRequest) {
     .from("profiles")
     .insert({
       id:             userId,
-      display_id:     displayId    ?? "user-0",
+      display_id:     displayId   ?? "user-0",
       username:       username.trim(),
       first_name:     firstName.trim(),
       last_name:      lastName?.trim() ?? "",
       alias:          username.trim(),
-      department:     department   ?? "Unassigned",
-      access_flags:   accessFlags  ?? [],
+      department:     department  ?? "Unassigned",
+      access_flags:   accessFlags ?? [],
       session_status: "OFFLINE",
       last_login_ip:  "0.0.0.0",
       last_active:    new Date().toISOString(),
@@ -113,7 +122,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: profileError.message }, { status: 500 });
   }
 
-  // Assign roles if provided
   if (roleIds && roleIds.length > 0) {
     await supabaseAdmin
       .from("user_roles")

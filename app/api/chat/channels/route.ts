@@ -6,19 +6,13 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { getEffectiveFlags } from "@/lib/effective-flags";
 
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Get user flags
-  const { data: profileData } = await supabaseAdmin
-    .from("profiles")
-    .select("access_flags")
-    .eq("id", session.id)
-    .single();
-
-  const userFlags: string[] = (profileData as { access_flags: string[] } | null)?.access_flags ?? [];
+  const userFlags = await getEffectiveFlags(session.id);
   const isAdmin = userFlags.includes("Administrator");
 
   const { data: channels, error } = await supabaseAdmin

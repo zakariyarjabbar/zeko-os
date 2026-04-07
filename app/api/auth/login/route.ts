@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { getEffectiveFlags } from "@/lib/effective-flags";
 import { setSession } from "@/lib/auth";
 
 // Use anon key for sign-in — never the service role
@@ -49,16 +50,8 @@ export async function POST(req: NextRequest) {
   // ── Derive role from profile if not stored in user metadata ──
   let role = meta.role ?? "user";
   if (!meta.role) {
-    const { data: profileRow } = await supabaseAdmin
-      .from("profiles")
-      .select("access_flags")
-      .eq("id", user.id)
-      .single();
-
-    if (profileRow) {
-      const flags = (profileRow as { access_flags: string[] }).access_flags ?? [];
-      if (flags.includes("Administrator")) role = "admin";
-    }
+    const flags = await getEffectiveFlags(user.id);
+    if (flags.includes("Administrator")) role = "admin";
   }
 
   // ── Derive display name from profile if not in metadata ─────

@@ -1,35 +1,17 @@
 // app/system/users/layout.tsx
-// Server-side guard: only ROOT_ACCESS users can access /system/users.
-// Redirects everyone else to /system/overview.
+// Server-side guard: moderator, admin, or Administrator can access /system/users.
 
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { supabaseAdmin } from "@/lib/supabase/server";
-import { isFounder } from "@/lib/permissions";
+import { getEffectiveFlags } from "@/lib/effective-flags";
+import { canViewUsers } from "@/lib/permissions";
 
-interface ProfileFlags {
-  access_flags: string[];
-}
-
-export default async function UsersLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function UsersLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const { data } = await supabaseAdmin
-    .from("profiles")
-    .select("access_flags")
-    .eq("id", session.id)
-    .single();
-
-  const flags = (data as ProfileFlags | null)?.access_flags ?? [];
-
-  if (!isFounder(flags)) {
-    redirect("/system/overview");
-  }
+  const flags = await getEffectiveFlags(session.id);
+  if (!canViewUsers(flags)) redirect("/system/overview");
 
   return <>{children}</>;
 }

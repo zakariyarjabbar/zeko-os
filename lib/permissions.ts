@@ -1,15 +1,58 @@
 // lib/permissions.ts
 // Permission guard helpers.
-// Permissions are now dynamic DB records — no hardcoded flag list.
-// "Administrator" is the system superuser permission.
+// Permissions are dynamic DB records — no hardcoded list.
 
 export const ADMIN_PERMISSION = "Administrator";
 
-// Administrator = has the "Administrator" permission flag
-export function isFounder(accessFlags: string[]): boolean {
-  return accessFlags.includes(ADMIN_PERMISSION);
+// Has Administrator flag
+export function isFounder(flags: string[]): boolean {
+  return flags.includes(ADMIN_PERMISSION);
 }
 
-export function hasPermission(accessFlags: string[], flag: string): boolean {
-  return accessFlags.includes(ADMIN_PERMISSION) || accessFlags.includes(flag);
+// General flag check — Administrator bypasses everything
+export function hasPermission(flags: string[], flag: string): boolean {
+  return flags.includes(ADMIN_PERMISSION) || flags.includes(flag);
 }
+
+// ─── Named permission checks ──────────────────────────────────
+
+export function canViewInbox(flags: string[]): boolean {
+  return flags.includes(ADMIN_PERMISSION)
+    || flags.includes("inbox-manager")
+    || flags.includes("view-inbox");
+}
+
+export function canManageInbox(flags: string[]): boolean {
+  return flags.includes(ADMIN_PERMISSION) || flags.includes("inbox-manager");
+}
+
+// Can list users (moderator, admin, Administrator)
+export function canViewUsers(flags: string[]): boolean {
+  return flags.includes(ADMIN_PERMISSION)
+    || flags.includes("admin")
+    || flags.includes("moderator");
+}
+
+// Can create users (admin, Administrator — not moderator)
+export function canCreateUsers(flags: string[]): boolean {
+  return flags.includes(ADMIN_PERMISSION) || flags.includes("admin");
+}
+
+// Can edit a user's profile
+// moderator: limited fields only (firstName, lastName, username, displayId, password, department)
+// admin/Administrator: all fields, but blocked on Administrator-flagged targets
+export function canEditUsers(flags: string[]): boolean {
+  return flags.includes(ADMIN_PERMISSION)
+    || flags.includes("admin")
+    || flags.includes("moderator");
+}
+
+// Can delete a user (admin, Administrator — not moderator)
+export function canDeleteUsers(flags: string[]): boolean {
+  return flags.includes(ADMIN_PERMISSION) || flags.includes("admin");
+}
+
+// Moderator-only fields (subset of edit)
+export const MODERATOR_EDITABLE_FIELDS = new Set([
+  "firstName", "lastName", "username", "displayId", "password", "department",
+]);

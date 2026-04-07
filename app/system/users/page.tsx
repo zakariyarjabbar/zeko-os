@@ -12,6 +12,8 @@ import {
   Eye, EyeOff, ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useProfile } from "@/components/system/SessionContext";
+import { canCreateUsers, canDeleteUsers, isFounder } from "@/lib/permissions";
 
 // ─── Types ────────────────────────────────────────────────────
 interface Permission { id: string; name: string; description: string; }
@@ -117,6 +119,11 @@ function SelectField({ value, onChange, options }: {
 
 // ─── Main ─────────────────────────────────────────────────────
 export default function UsersPage() {
+  const profile     = useProfile();
+  const actorFlags  = profile.accessFlags;
+  const isModerator = actorFlags.includes("moderator") && !actorFlags.includes("admin") && !isFounder(actorFlags);
+  const canCreate   = canCreateUsers(actorFlags);
+  const canDelete   = canDeleteUsers(actorFlags);
   const [users,       setUsers]       = useState<UserRow[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [roles,       setRoles]       = useState<Role[]>([]);
@@ -245,12 +252,14 @@ export default function UsersPage() {
             <button onClick={fetchAll} className="text-zk-muted/50 hover:text-zk-green transition-colors p-1">
               <RefreshCw size={11} className={loading ? "animate-spin" : ""} />
             </button>
-            <button
-              onClick={openCreate}
-              className="flex items-center gap-1 px-2 py-1 rounded-sm border font-mono text-[9px] text-zk-green border-zk-green/30 bg-zk-green/5 hover:bg-zk-green/15 hover:border-zk-green/60 transition-all"
-            >
-              <UserPlus size={10} /> New
-            </button>
+            {canCreate && (
+              <button
+                onClick={openCreate}
+                className="flex items-center gap-1 px-2 py-1 rounded-sm border font-mono text-[9px] text-zk-green border-zk-green/30 bg-zk-green/5 hover:bg-zk-green/15 hover:border-zk-green/60 transition-all"
+              >
+                <UserPlus size={10} /> New
+              </button>
+            )}
           </div>
         </div>
 
@@ -317,7 +326,7 @@ export default function UsersPage() {
                   }
                 </div>
                 <div className="flex items-center gap-2">
-                  {mode === "edit" && selected && (
+                  {mode === "edit" && selected && canDelete && (
                     <button
                       onClick={() => handleDelete(selected.id)}
                       disabled={!!deleting}
@@ -386,44 +395,48 @@ export default function UsersPage() {
                     <SelectField value={form.department} onChange={(v) => setForm((p) => ({ ...p, department: v }))} options={DEPARTMENTS} />
                   </Field>
 
-                  <Field label="Roles">
-                    {roles.length === 0 ? (
-                      <p className="font-mono text-[10px] text-zk-muted/40 italic mt-1">No roles defined yet.</p>
-                    ) : (
-                      <div className="flex flex-wrap gap-1.5 mt-1">
-                        {roles.map((r) => {
-                          const active = form.roleIds.includes(r.id);
-                          return (
-                            <button
-                              key={r.id}
-                              type="button"
-                              onClick={() => setForm((p) => ({
-                                ...p,
-                                roleIds: active
-                                  ? p.roleIds.filter((id) => id !== r.id)
-                                  : [...p.roleIds, r.id],
-                              }))}
-                              className={cn(
-                                "font-mono text-[9px] px-2.5 py-1 rounded-sm border tracking-widest transition-all duration-150",
-                                active
-                                  ? "border-zk-green/60 bg-zk-green/15 text-zk-green"
-                                  : "border-zk-border/50 bg-transparent text-zk-muted/50 hover:text-zk-slate hover:border-zk-border"
-                              )}
-                            >
-                              {r.name}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </Field>
+                  {/* Roles — admin/Administrator only */}
+                  {!isModerator && (
+                    <Field label="Roles">
+                      {roles.length === 0 ? (
+                        <p className="font-mono text-[10px] text-zk-muted/40 italic mt-1">No roles defined yet.</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                          {roles.map((r) => {
+                            const active = form.roleIds.includes(r.id);
+                            return (
+                              <button
+                                key={r.id}
+                                type="button"
+                                onClick={() => setForm((p) => ({
+                                  ...p,
+                                  roleIds: active
+                                    ? p.roleIds.filter((id) => id !== r.id)
+                                    : [...p.roleIds, r.id],
+                                }))}
+                                className={cn(
+                                  "font-mono text-[9px] px-2.5 py-1 rounded-sm border tracking-widest transition-all duration-150",
+                                  active
+                                    ? "border-zk-green/60 bg-zk-green/15 text-zk-green"
+                                    : "border-zk-border/50 bg-transparent text-zk-muted/50 hover:text-zk-slate hover:border-zk-border"
+                                )}
+                              >
+                                {r.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </Field>
+                  )}
                 </div>
 
-                {/* Permissions */}
+                {/* Permissions — admin/Administrator only */}
+                {!isModerator && (
                 <Field label="Permissions">
                   {permissions.length === 0 ? (
                     <p className="font-mono text-[10px] text-zk-muted/40 italic mt-1">
-                      No permissions defined yet. Create them in Roles → Permissions.
+                      No permissions defined yet.
                     </p>
                   ) : (
                     <div className="flex flex-wrap gap-1.5 mt-1">
@@ -449,6 +462,7 @@ export default function UsersPage() {
                     </div>
                   )}
                 </Field>
+                )}
               </div>
 
               {/* Save */}

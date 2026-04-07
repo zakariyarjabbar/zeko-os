@@ -11,7 +11,15 @@ import { LayoutDashboard, MessageSquare, Inbox, Users, Lock, ShieldCheck } from 
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { useProfile } from "@/components/system/SessionContext";
-import { isFounder } from "@/lib/permissions";
+import { isFounder, canViewInbox, canViewUsers } from "@/lib/permissions";
+
+// ─── Permission check for nav items ──────────────────────────
+function checkFlag(requireFlag: string, flags: string[]): boolean {
+  if (requireFlag === "view-inbox")    return canViewInbox(flags);
+  if (requireFlag === "moderator")     return canViewUsers(flags);
+  if (requireFlag === "Administrator") return isFounder(flags);
+  return flags.includes(requireFlag);
+}
 
 // ─── Nav config ───────────────────────────────────────────────
 interface NavItem {
@@ -25,9 +33,9 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { href: "/system/overview", label: "Overview", icon: LayoutDashboard },
   { href: "/system/chat",     label: "Chat",     icon: MessageSquare    },
-  { href: "/system/inbox",    label: "Inbox",    icon: Inbox, badge: "unread" },
-  { href: "/system/users",    label: "Users",    icon: Users,       requireFlag: "ROOT_ACCESS" },
-  { href: "/system/roles",    label: "Roles",    icon: ShieldCheck, requireFlag: "ROOT_ACCESS" },
+  { href: "/system/inbox",    label: "Inbox",    icon: Inbox,       badge: "unread", requireFlag: "view-inbox" },
+  { href: "/system/users",    label: "Users",    icon: Users,       requireFlag: "moderator" },
+  { href: "/system/roles",    label: "Roles",    icon: ShieldCheck, requireFlag: "Administrator" },
 ];
 
 // ─── Locked item ──────────────────────────────────────────────
@@ -79,11 +87,11 @@ function LockedItem({ label, icon: Icon }: { label: string; icon: React.ElementT
           <div className="flex items-center gap-1.5">
             <Lock size={9} className="text-zk-red" />
             <span className="font-mono text-[9px] text-zk-red tracking-widest uppercase">
-              Administrator permission required
+              Insufficient permissions
             </span>
           </div>
           <p className="font-mono text-[9px] text-zk-muted/50 mt-0.5">
-            Insufficient clearance level
+            You do not have access to this module
           </p>
           {/* Arrow */}
           <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-zk-red/30" />
@@ -129,7 +137,7 @@ export function SystemSidebar() {
 
       <nav className="flex flex-col gap-0.5 px-2">
         {NAV_ITEMS.map(({ href, label, icon: Icon, requireFlag, badge }) => {
-          const locked = !!requireFlag && !profile.accessFlags.includes("Administrator");
+          const locked = !!requireFlag && !checkFlag(requireFlag, profile.accessFlags);
 
           // Render locked version
           if (locked) {

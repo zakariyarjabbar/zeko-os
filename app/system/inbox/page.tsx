@@ -11,7 +11,8 @@ import {
   ChevronLeft, AlertCircle, CheckCircle2, Inbox,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/Badge";
+import { useProfile } from "@/components/system/SessionContext";
+import { canManageInbox } from "@/lib/permissions";
 
 // ─── Types ────────────────────────────────────────────────────
 interface ContactMessage {
@@ -81,6 +82,9 @@ function MessageItem({
 
 // ─── Main component ───────────────────────────────────────────
 export default function InboxPage() {
+  const profile   = useProfile();
+  const canManage = canManageInbox(profile.accessFlags);
+
   const [messages,  setMessages]  = useState<ContactMessage[]>([]);
   const [selected,  setSelected]  = useState<ContactMessage | null>(null);
   const [loading,   setLoading]   = useState(true);
@@ -255,25 +259,27 @@ export default function InboxPage() {
                     </div>
                   </div>
 
-                  {/* Delete button */}
-                  <button
-                    onClick={() => handleDelete(selected.id)}
-                    disabled={deleting}
-                    className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 rounded-sm border",
-                      "font-mono text-[10px] tracking-wider shrink-0",
-                      "border-zk-red/30 bg-zk-red/5 text-zk-red",
-                      "hover:bg-zk-red/15 hover:border-zk-red/60",
-                      "disabled:opacity-40 disabled:pointer-events-none",
-                      "transition-all duration-150"
-                    )}
-                  >
-                    {deleting
-                      ? <span className="w-3 h-3 border border-zk-red border-t-transparent rounded-full animate-spin" />
-                      : <Trash2 size={11} />
-                    }
-                    Delete
-                  </button>
+                  {/* Delete button — inbox-manager only */}
+                  {canManage && (
+                    <button
+                      onClick={() => handleDelete(selected.id)}
+                      disabled={deleting}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 rounded-sm border",
+                        "font-mono text-[10px] tracking-wider shrink-0",
+                        "border-zk-red/30 bg-zk-red/5 text-zk-red",
+                        "hover:bg-zk-red/15 hover:border-zk-red/60",
+                        "disabled:opacity-40 disabled:pointer-events-none",
+                        "transition-all duration-150"
+                      )}
+                    >
+                      {deleting
+                        ? <span className="w-3 h-3 border border-zk-red border-t-transparent rounded-full animate-spin" />
+                        : <Trash2 size={11} />
+                      }
+                      Delete
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -286,8 +292,8 @@ export default function InboxPage() {
                   {selected.message}
                 </div>
 
-                {/* Reply area */}
-                <div className="mt-6">
+                {/* Reply area — inbox-manager only */}
+                {canManage && <div className="mt-6">
                   <div className="font-mono text-[9px] text-zk-muted/40 tracking-[0.2em] uppercase mb-3">
                     // Reply Transmission → {selected.email}
                   </div>
@@ -360,7 +366,16 @@ export default function InboxPage() {
                       {sending ? "Sending..." : "Send Reply"}
                     </button>
                   </div>
-                </div>
+                </div>}
+
+                {/* View-only notice for non-managers */}
+                {!canManage && (
+                  <div className="mt-6 px-4 py-3 rounded-sm border border-dashed border-zk-border/40">
+                    <p className="font-mono text-[10px] text-zk-muted/40 tracking-widest text-center">
+                      VIEW ONLY — inbox-manager permission required to reply or delete
+                    </p>
+                  </div>
+                )}
               </div>
             </motion.div>
           ) : (

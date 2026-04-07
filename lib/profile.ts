@@ -3,6 +3,7 @@
 
 import { type SessionPayload } from "./auth";
 import { supabaseAdmin } from "./supabase/server";
+import { getEffectiveFlags } from "./effective-flags";
 import { type SessionStatus } from "./types/user";
 
 // ─── Interface ────────────────────────────────────────────────
@@ -63,6 +64,9 @@ export async function buildProfile(session: SessionPayload): Promise<UserProfile
 
   const row = (data as ProfileRow | null) ?? DEFAULT;
 
+  // Effective flags = own flags ∪ role permissions
+  const effectiveFlags = await getEffectiveFlags(session.id);
+
   return {
     id:            session.id,
     displayId:     row.display_id,
@@ -73,7 +77,7 @@ export async function buildProfile(session: SessionPayload): Promise<UserProfile
     role:          session.role.toUpperCase(),
     alias:         row.alias,
     department:    row.department,
-    accessFlags:   row.access_flags,
+    accessFlags:   effectiveFlags,
     sessionStatus: (row.session_status as SessionStatus) ?? "OFFLINE",
     lastLoginIp:   row.last_login_ip,
     lastActive:    row.last_active,
