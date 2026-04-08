@@ -1,19 +1,20 @@
 // app/system/chat/page.tsx
-// Chat: channels with permissions + real DMs with search.
+// Redesigned chat interface.
 
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { ChatSidebar }  from "@/components/system/chat/ChatSidebar";
-import { MessageLog }   from "@/components/system/chat/MessageLog";
-import { CliInput }     from "@/components/system/chat/CliInput";
-import { useSession }   from "@/components/system/SessionContext";
-import { useProfile }   from "@/components/system/SessionContext";
+import { Users, Wifi } from "lucide-react";
+import { ChatSidebar } from "@/components/system/chat/ChatSidebar";
+import { MessageLog }  from "@/components/system/chat/MessageLog";
+import { CliInput }    from "@/components/system/chat/CliInput";
+import { useSession }  from "@/components/system/SessionContext";
+import { useProfile }  from "@/components/system/SessionContext";
+import { cn }          from "@/lib/utils";
 import {
-  type Channel, type ChatMessage, type DMConversation, type DirectMessage,
+  type Channel, type ChatMessage, type DMConversation,
 } from "@/components/system/chat/types";
 
-// ─── Row types ────────────────────────────────────────────────
 interface MessageRow {
   id: string; channel_id: string; user_id: string;
   user_handle: string; body: string; type: string; created_at: string;
@@ -52,7 +53,6 @@ function nowTimestamp(): string {
   return new Date().toTimeString().slice(0, 8);
 }
 
-// ─── Component ────────────────────────────────────────────────
 export default function ChatPage() {
   const session = useSession();
   const profile = useProfile();
@@ -67,20 +67,19 @@ export default function ChatPage() {
   const [forbidden,     setForbidden]     = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ── Derived permissions for active channel ─────────────────
   const isAdmin   = profile.accessFlags.includes("Administrator");
   const canDelete = isDm
-    ? true  // DM: enforced server-side (own messages only)
+    ? true
     : isAdmin || profile.accessFlags.includes(`delete-msg:${activeChannel}`);
 
-  // ── Load channels ──────────────────────────────────────────
+  // ── Channels ───────────────────────────────────────────────
   const fetchChannels = useCallback(async () => {
     const res  = await fetch("/api/chat/channels");
     const data = await res.json();
     if (Array.isArray(data)) setChannels(data);
   }, []);
 
-  // ── Load DM conversations ──────────────────────────────────
+  // ── DM conversations ───────────────────────────────────────
   const fetchDmConvos = useCallback(async () => {
     const res  = await fetch("/api/chat/dm?conversations=1");
     const data = await res.json();
@@ -92,7 +91,7 @@ export default function ChatPage() {
     fetchDmConvos();
   }, [fetchChannels, fetchDmConvos]);
 
-  // ── Load messages ──────────────────────────────────────────
+  // ── Messages ───────────────────────────────────────────────
   const loadMessages = useCallback(async (channelId: string, dmUserId?: string) => {
     setLoadingMsgs(true);
     setMessages([]);
@@ -153,7 +152,7 @@ export default function ChatPage() {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [activeChannel, activeDmUser, isDm, session.id]);
 
-  // ── Handle sidebar selection ───────────────────────────────
+  // ── Sidebar select ─────────────────────────────────────────
   function handleSelect(id: string, type: "channel" | "dm", dmUserId?: string) {
     if (type === "dm" && dmUserId) {
       setActiveDmUser(dmUserId);
@@ -166,17 +165,16 @@ export default function ChatPage() {
     }
   }
 
-  // ── Send message ───────────────────────────────────────────
+  // ── Send ───────────────────────────────────────────────────
   async function handleSend(text: string) {
     const optimisticId = `opt-${Date.now()}`;
-
     setMessages((prev) => [
       ...prev,
       {
         id:        optimisticId,
         channel:   isDm && activeDmUser ? `dm:${activeDmUser}` : activeChannel,
         timestamp: nowTimestamp(),
-        user:      session.name.toLowerCase(),
+        user:      profile.username || session.name.toLowerCase(),
         userId:    session.id,
         text,
         type:      "message",
@@ -204,37 +202,37 @@ export default function ChatPage() {
     }
   }
 
-  // ── Delete message ─────────────────────────────────────────
+  // ── Delete ─────────────────────────────────────────────────
   async function handleDelete(msgId: string) {
     setMessages((prev) => prev.filter((m) => m.id !== msgId));
     try {
-      if (isDm) {
-        await fetch(`/api/chat/dm?id=${msgId}`, { method: "DELETE" });
-      } else {
-        const res = await fetch(`/api/chat/messages?id=${msgId}`, { method: "DELETE" });
-        if (!res.ok) {
-          // Restore on failure
-          loadMessages(activeChannel, activeDmUser);
-        }
-      }
+      const res = isDm
+        ? await fetch(`/api/chat/dm?id=${msgId}`, { method: "DELETE" })
+        : await fetch(`/api/chat/messages?id=${msgId}`, { method: "DELETE" });
+      if (!res.ok) loadMessages(activeChannel, activeDmUser);
     } catch { loadMessages(activeChannel, activeDmUser); }
   }
 
-  // ── Header label ───────────────────────────────────────────
-  const channelMeta = isDm
-    ? dmConvos.find((d) => d.userId === activeDmUser)
-    : channels.find((c) => c.id === activeChannel);
+  // ── Header metadata ────────────────────────────────────────
+  const activeCh   = channels.find((c) => c.id === activeChannel);
+  const activeDm   = dmConvos.find((d) => d.userId === activeDmUser);
 
   const headerLabel = isDm
-    ? `@${dmConvos.find((d) => d.userId === activeDmUser)?.handle ?? "unknown"}`
-    : (channelMeta as Channel | undefined)?.label ?? `#${activeChannel}`;
+    ? `@${activeDm?.handle ?? "unknown"}`
+    : activeCh?.label ?? `#${activeChannel}`;
 
   const headerTopic = isDm
-    ? "direct message · end-to-end encrypted"
-    : (channelMeta as Channel | undefined)?.topic ?? "";
+    ? "direct message"
+    : activeCh?.topic ?? "";
+
+  const memberCount = !isDm ? (activeCh?.memberCount ?? 0) : 0;
+
+  const username = profile.username || session.name.toLowerCase();
 
   return (
     <div className="flex h-full overflow-hidden">
+
+      {/* ── Sidebar ─────────────────────────────────────── */}
       <ChatSidebar
         channels={channels}
         activeChannel={activeChannel}
@@ -244,27 +242,65 @@ export default function ChatPage() {
         onRefreshDms={fetchDmConvos}
       />
 
+      {/* ── Main area ───────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0 bg-zk-bg">
-        {/* Channel header */}
-        <div className="h-9 shrink-0 flex items-center px-4 border-b border-zk-border bg-zk-surface/30">
-          <span className="font-mono text-xs text-zk-green tracking-widest">{headerLabel}</span>
-          <span className="ml-3 font-mono text-[10px] text-zk-muted/50 tracking-wide">
-            — {headerTopic}
-          </span>
-          {loadingMsgs && (
-            <span className="ml-auto font-mono text-[9px] text-zk-muted/40 tracking-widest animate-pulse">
-              LOADING...
+
+        {/* Channel / DM header */}
+        <div className={cn(
+          "shrink-0 h-12 flex items-center px-5 gap-4",
+          "border-b border-zk-border/60 bg-[rgba(13,17,23,0.7)]",
+        )}>
+          {/* Name */}
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-mono text-sm font-semibold text-zk-white tracking-wide truncate">
+              {headerLabel}
             </span>
+            {loadingMsgs && (
+              <span className="w-1.5 h-1.5 rounded-full bg-zk-green/50 animate-pulse shrink-0" />
+            )}
+          </div>
+
+          {/* Divider */}
+          {headerTopic && (
+            <span className="shrink-0 w-px h-4 bg-zk-border/60" aria-hidden="true" />
+          )}
+
+          {/* Topic */}
+          {headerTopic && (
+            <span className="font-mono text-[11px] text-zk-muted/50 truncate flex-1 min-w-0">
+              {headerTopic}
+            </span>
+          )}
+
+          {/* Right: member count */}
+          {memberCount != null && memberCount > 0 && (
+            <div className="shrink-0 flex items-center gap-1.5 ml-auto">
+              <Wifi size={11} className="text-zk-green/50" />
+              <span className="font-mono text-[10px] text-zk-muted/50">
+                {memberCount} online
+              </span>
+            </div>
+          )}
+
+          {isDm && (
+            <div className="shrink-0 flex items-center gap-1.5 ml-auto">
+              <span className="w-1.5 h-1.5 rounded-full bg-zk-green shadow-glow-sm" />
+              <span className="font-mono text-[10px] text-zk-muted/50">
+                {activeDm?.handle}
+              </span>
+            </div>
           )}
         </div>
 
-        {/* Forbidden state */}
+        {/* Content */}
         {forbidden ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3">
-            <span className="font-mono text-2xl text-zk-red/30">⊘</span>
-            <p className="font-mono text-xs text-zk-red/60 tracking-widest">ACCESS DENIED</p>
-            <p className="font-mono text-[10px] text-zk-muted/40">
-              You do not have permission to view this channel.
+            <div className="w-12 h-12 rounded-sm border border-zk-red/20 bg-zk-red/5 flex items-center justify-center">
+              <span className="font-mono text-xl text-zk-red/40">⊘</span>
+            </div>
+            <p className="font-mono text-xs text-zk-red/50 tracking-widest">ACCESS DENIED</p>
+            <p className="font-mono text-[10px] text-zk-muted/30 max-w-xs text-center">
+              You do not have the <span className="text-zk-muted/50">view:{activeChannel}</span> permission.
             </p>
           </div>
         ) : (
@@ -273,8 +309,13 @@ export default function ChatPage() {
               messages={messages}
               canDelete={canDelete}
               onDelete={handleDelete}
+              currentUserId={session.id}
             />
-            <CliInput channelLabel={headerLabel} onSend={handleSend} />
+            <CliInput
+              channelLabel={headerLabel}
+              username={username}
+              onSend={handleSend}
+            />
           </>
         )}
       </div>
