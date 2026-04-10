@@ -25,12 +25,50 @@ interface SearchResult {
 }
 
 interface ChatSidebarProps {
-  channels:      Channel[];
-  activeChannel: string;
-  onSelect:      (id: string, type: "channel" | "dm", dmUserId?: string) => void;
-  dmConvos:      DMConversation[];
-  activeDmUser?: string;
-  onRefreshDms:  () => void;
+  channels:        Channel[];
+  activeChannel:   string;
+  onSelect:        (id: string, type: "channel" | "dm", dmUserId?: string) => void;
+  dmConvos:        DMConversation[];
+  activeDmUser?:   string;
+  onRefreshDms:    () => void;
+  loadingChannels?: boolean;
+  loadingDms?:      boolean;
+}
+
+// ─── Skeletons ────────────────────────────────────────────────
+function SkeletonChannels() {
+  const widths = ["w-24", "w-20", "w-28", "w-16"];
+  return (
+    <div className="px-2 flex flex-col gap-px animate-pulse">
+      {widths.map((w, i) => (
+        <div key={i} className="flex items-center gap-2 px-2.5 py-2 rounded-sm border border-transparent">
+          <div className="w-3 h-3 rounded-sm bg-zk-border/25 shrink-0" />
+          <div className={cn("h-2.5 rounded-sm bg-zk-border/20", w)} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SkeletonDms() {
+  const rows = [
+    { handle: "w-20", preview: "w-32" },
+    { handle: "w-16", preview: "w-28" },
+    { handle: "w-24", preview: "w-20" },
+  ];
+  return (
+    <div className="px-2 flex flex-col gap-px animate-pulse">
+      {rows.map((r, i) => (
+        <div key={i} className="px-2.5 py-2 rounded-sm border border-transparent">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <div className="w-2.5 h-2.5 rounded-sm bg-zk-border/25 shrink-0" />
+            <div className={cn("h-2.5 rounded-sm bg-zk-border/25", r.handle)} />
+          </div>
+          <div className={cn("h-2 rounded-sm bg-zk-border/15 ml-3.5", r.preview)} />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 // ─── Relative time ────────────────────────────────────────────
@@ -65,6 +103,7 @@ function SectionLabel({
 // ─── Component ────────────────────────────────────────────────
 export function ChatSidebar({
   channels, activeChannel, onSelect, dmConvos, activeDmUser, onRefreshDms,
+  loadingChannels, loadingDms,
 }: ChatSidebarProps) {
   const [searching,     setSearching]     = useState(false);
   const [query,         setQuery]         = useState("");
@@ -125,7 +164,7 @@ export function ChatSidebar({
 
         {/* ── Channels ──────────────────────────────────── */}
         <SectionLabel>Channels</SectionLabel>
-        <div className="px-2 flex flex-col gap-px">
+        {loadingChannels ? <SkeletonChannels /> : <div className="px-2 flex flex-col gap-px">
           {channels.map((ch) => {
             const active  = activeChannel === ch.id && !activeDmUser;
             const canView = ch.permissions.includes(`view:${ch.id}`);
@@ -177,7 +216,7 @@ export function ChatSidebar({
               </button>
             );
           })}
-        </div>
+        </div>}
 
         {/* ── Direct Messages ───────────────────────────── */}
         <SectionLabel
@@ -255,7 +294,7 @@ export function ChatSidebar({
         )}
 
         {/* DM list */}
-        <div className="px-2 flex flex-col gap-px">
+        {loadingDms ? <SkeletonDms /> : <div className="px-2 flex flex-col gap-px">
           {dmConvos.length === 0 && !searching && (
             <p className="font-mono text-[9px] text-zk-muted/25 px-2.5 py-1.5 italic">
               No conversations yet
@@ -314,7 +353,7 @@ export function ChatSidebar({
               </button>
             );
           })}
-        </div>
+        </div>}
       </div>
 
       {/* ── Footer ────────────────────────────────────────── */}

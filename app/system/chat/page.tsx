@@ -26,10 +26,12 @@ interface DMRow {
 }
 
 function rowToMessage(m: MessageRow): ChatMessage {
+  const d = new Date(m.created_at);
   return {
     id:        m.id,
     channel:   m.channel_id,
-    timestamp: new Date(m.created_at).toTimeString().slice(0, 8),
+    timestamp: d.toTimeString().slice(0, 8),
+    date:      d.toISOString().slice(0, 10),
     user:      m.user_handle,
     userId:    m.user_id,
     text:      m.body,
@@ -38,10 +40,12 @@ function rowToMessage(m: MessageRow): ChatMessage {
 }
 
 function dmRowToMessage(m: DMRow, myId: string): ChatMessage {
+  const d = new Date(m.created_at);
   return {
     id:        m.id,
     channel:   `dm:${m.from_user_id === myId ? m.to_user_id : m.from_user_id}`,
-    timestamp: new Date(m.created_at).toTimeString().slice(0, 8),
+    timestamp: d.toTimeString().slice(0, 8),
+    date:      d.toISOString().slice(0, 10),
     user:      m.from_handle,
     userId:    m.from_user_id,
     text:      m.body,
@@ -53,19 +57,33 @@ function nowTimestamp(): string {
   return new Date().toTimeString().slice(0, 8);
 }
 
+// Cache key mirrors Discord's per-channel store
+function cacheKey(channelId: string, dmUserId?: string): string {
+  return dmUserId ? `dm:${dmUserId}` : `ch:${channelId}`;
+}
+
 export default function ChatPage() {
   const session = useSession();
   const profile = useProfile();
 
-  const [channels,      setChannels]      = useState<Channel[]>([]);
-  const [messages,      setMessages]      = useState<ChatMessage[]>([]);
-  const [dmConvos,      setDmConvos]      = useState<DMConversation[]>([]);
-  const [activeChannel, setActiveChannel] = useState("global-ops");
-  const [activeDmUser,  setActiveDmUser]  = useState<string | undefined>();
-  const [isDm,          setIsDm]          = useState(false);
-  const [loadingMsgs,   setLoadingMsgs]   = useState(false);
-  const [forbidden,     setForbidden]     = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [channels,        setChannels]        = useState<Channel[]>([]);
+  const [messages,        setMessages]        = useState<ChatMessage[]>([]);
+  const [dmConvos,        setDmConvos]        = useState<DMConversation[]>([]);
+  const [activeChannel,   setActiveChannel]   = useState("global-ops");
+  const [activeDmUser,    setActiveDmUser]    = useState<string | undefined>();
+  const [isDm,            setIsDm]            = useState(false);
+  const [loadingMsgs,     setLoadingMsgs]     = useState(false);
+  const [loadingChannels, setLoadingChannels] = useState(true);
+  const [loadingDms,      setLoadingDms]      = useState(true);
+  const [forbidden,       setForbidden]       = useState(false);
+
+  // ── Cache ──────────────────────────────────────────────────
+  // Per-channel message store, keyed by cacheKey().
+  // Lives in a ref so mutations never cause re-renders.
+  const msgCache     = useRef<Map<string, ChatMessage[]>>(new Map());
+  // Tracks which key is the active load — discards stale responses on rapid channel switches.
+  const activeKeyRef = useRef<string>("");
+  const pollRef      = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isAdmin   = profile.accessFlags.includes("Administrator");
   const canDelete = isDm
@@ -74,16 +92,20 @@ export default function ChatPage() {
 
   // ── Channels ───────────────────────────────────────────────
   const fetchChannels = useCallback(async () => {
-    const res  = await fetch("/api/chat/channels");
-    const data = await res.json();
-    if (Array.isArray(data)) setChannels(data);
+    try {
+      const res  = await fetch("/api/chat/channels");
+      const data = await res.json();
+      if (Array.isArray(data)) setChannels(data);
+    } finally { setLoadingChannels(false); }
   }, []);
 
   // ── DM conversations ───────────────────────────────────────
   const fetchDmConvos = useCallback(async () => {
-    const res  = await fetch("/api/chat/dm?conversations=1");
-    const data = await res.json();
-    if (Array.isArray(data)) setDmConvos(data);
+    try {
+      const res  = await fetch("/api/chat/dm?conversations=1");
+      const data = await res.json();
+      if (Array.isArray(data)) setDmConvos(data);
+    } finally { setLoadingDms(false); }
   }, []);
 
   useEffect(() => {
@@ -93,23 +115,46 @@ export default function ChatPage() {
 
   // ── Messages ───────────────────────────────────────────────
   const loadMessages = useCallback(async (channelId: string, dmUserId?: string) => {
-    setLoadingMsgs(true);
-    setMessages([]);
-    setForbidden(false);
+    const key    = cacheKey(channelId, dmUserId);
+    activeKeyRef.current = key;
 
+    const cached = msgCache.current.get(key);
+
+    if (cached) {
+      // Cache hit → show instantly, skip the skeleton
+      setMessages(cached);
+      setLoadingMsgs(false);
+      setForbidden(false);
+    } else {
+      // Cache miss → show skeleton while we wait
+      setLoadingMsgs(true);
+      setMessages([]);
+      setForbidden(false);
+    }
+
+    // Always fetch fresh in the background to pick up new messages
     try {
       if (dmUserId) {
         const res  = await fetch(`/api/chat/dm?with=${dmUserId}`);
         const data = await res.json() as DMRow[];
-        if (Array.isArray(data)) setMessages(data.map((m) => dmRowToMessage(m, session.id)));
+        if (!Array.isArray(data)) return;
+        const msgs = data.map((m) => dmRowToMessage(m, session.id));
+        msgCache.current.set(key, msgs);
+        if (activeKeyRef.current === key) setMessages(msgs);
       } else {
         const res = await fetch(`/api/chat/messages?channel=${channelId}`);
-        if (res.status === 403) { setForbidden(true); setLoadingMsgs(false); return; }
+        if (res.status === 403) {
+          if (activeKeyRef.current === key) setForbidden(true);
+          return;
+        }
         const data = await res.json() as MessageRow[];
-        if (Array.isArray(data)) setMessages(data.map(rowToMessage));
+        if (!Array.isArray(data)) return;
+        const msgs = data.map(rowToMessage);
+        msgCache.current.set(key, msgs);
+        if (activeKeyRef.current === key) setMessages(msgs);
       }
     } catch (e) { console.error("[chat]", e); }
-    finally { setLoadingMsgs(false); }
+    finally { if (activeKeyRef.current === key) setLoadingMsgs(false); }
   }, [session.id]);
 
   useEffect(() => {
@@ -133,18 +178,26 @@ export default function ChatPage() {
         }
         if (!Array.isArray(data)) return;
 
+        const key = cacheKey(activeChannel, isDm ? activeDmUser : undefined);
+
         setMessages((prev) => {
           const existingIds = new Set(prev.map((m) => m.id));
           const newMsgs = isDm && activeDmUser
             ? (data as DMRow[]).map((m) => dmRowToMessage(m, session.id)).filter((m) => !existingIds.has(m.id))
-            : (data as MessageRow[]).map(rowToMessage).filter((m) => !existingIds.has(m.id) && !m.id.startsWith("opt-"));
+            : (data as MessageRow[]).map(rowToMessage).filter((m) => !existingIds.has(m.id));
 
           if (newMsgs.length === 0) return prev;
+
           const withoutOptimistic = prev.filter((m) => {
             if (!m.id.startsWith("opt-")) return true;
             return !newMsgs.some((n) => n.user === m.user && n.text === m.text);
           });
-          return [...withoutOptimistic, ...newMsgs];
+          const next = [...withoutOptimistic, ...newMsgs];
+
+          // Mirror into cache (exclude unconfirmed optimistic entries)
+          msgCache.current.set(key, next.filter((m) => !m.id.startsWith("opt-")));
+
+          return next;
         });
       } catch { /* silent */ }
     }, 3000);
@@ -167,19 +220,24 @@ export default function ChatPage() {
 
   // ── Send ───────────────────────────────────────────────────
   async function handleSend(text: string) {
-    const optimisticId = `opt-${Date.now()}`;
-    setMessages((prev) => [
-      ...prev,
-      {
-        id:        optimisticId,
-        channel:   isDm && activeDmUser ? `dm:${activeDmUser}` : activeChannel,
-        timestamp: nowTimestamp(),
-        user:      profile.username || session.name.toLowerCase(),
-        userId:    session.id,
-        text,
-        type:      "message",
-      },
-    ]);
+    const optimisticId  = `opt-${Date.now()}`;
+    const key           = cacheKey(activeChannel, isDm ? activeDmUser : undefined);
+    const optimisticMsg: ChatMessage = {
+      id:        optimisticId,
+      channel:   isDm && activeDmUser ? `dm:${activeDmUser}` : activeChannel,
+      timestamp: nowTimestamp(),
+      date:      new Date().toISOString().slice(0, 10),
+      user:      session.name.toLowerCase(),
+      userId:    session.id,
+      text,
+      type:      "message",
+    };
+
+    setMessages((prev) => {
+      const next = [...prev, optimisticMsg];
+      msgCache.current.set(key, next);
+      return next;
+    });
 
     try {
       if (isDm && activeDmUser) {
@@ -188,6 +246,12 @@ export default function ChatPage() {
           body: JSON.stringify({ toUserId: activeDmUser, text }),
         });
         if (!res.ok) throw new Error(await res.text());
+        const confirmed = await res.json() as DMRow;
+        setMessages((prev) => {
+          const next = prev.map((m) => m.id === optimisticId ? { ...m, id: confirmed.id } : m);
+          msgCache.current.set(key, next);
+          return next;
+        });
         fetchDmConvos();
       } else {
         const res = await fetch("/api/chat/messages", {
@@ -195,16 +259,31 @@ export default function ChatPage() {
           body: JSON.stringify({ channelId: activeChannel, text }),
         });
         if (!res.ok) throw new Error(await res.text());
+        const confirmed = await res.json() as MessageRow;
+        setMessages((prev) => {
+          const next = prev.map((m) => m.id === optimisticId ? { ...m, id: confirmed.id } : m);
+          msgCache.current.set(key, next);
+          return next;
+        });
       }
     } catch (e) {
       console.error("[chat] send:", e);
-      setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+      setMessages((prev) => {
+        const next = prev.filter((m) => m.id !== optimisticId);
+        msgCache.current.set(key, next);
+        return next;
+      });
     }
   }
 
   // ── Delete ─────────────────────────────────────────────────
   async function handleDelete(msgId: string) {
-    setMessages((prev) => prev.filter((m) => m.id !== msgId));
+    const key = cacheKey(activeChannel, isDm ? activeDmUser : undefined);
+    setMessages((prev) => {
+      const next = prev.filter((m) => m.id !== msgId);
+      msgCache.current.set(key, next);
+      return next;
+    });
     try {
       const res = isDm
         ? await fetch(`/api/chat/dm?id=${msgId}`, { method: "DELETE" })
@@ -227,7 +306,7 @@ export default function ChatPage() {
 
   const memberCount = !isDm ? (activeCh?.memberCount ?? 0) : 0;
 
-  const username = profile.username || session.name.toLowerCase();
+  const username = session.name.toLowerCase();
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -240,6 +319,8 @@ export default function ChatPage() {
         dmConvos={dmConvos}
         activeDmUser={activeDmUser}
         onRefreshDms={fetchDmConvos}
+        loadingChannels={loadingChannels}
+        loadingDms={loadingDms}
       />
 
       {/* ── Main area ───────────────────────────────────── */}
@@ -310,6 +391,7 @@ export default function ChatPage() {
               canDelete={canDelete}
               onDelete={handleDelete}
               currentUserId={session.id}
+              loading={loadingMsgs}
             />
             <CliInput
               channelLabel={headerLabel}

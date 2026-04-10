@@ -16,6 +16,7 @@ interface MessageLogProps {
   canDelete: boolean;
   onDelete:  (id: string) => void;
   currentUserId: string;
+  loading?:  boolean;
 }
 
 // ─── Message grouping ─────────────────────────────────────────
@@ -205,17 +206,92 @@ function DateSeparator({ label }: { label: string }) {
   );
 }
 
+// ─── Skeleton ─────────────────────────────────────────────────
+const SKELETON_ROWS: { lines: string[] }[] = [
+  { lines: ["w-2/3", "w-1/2"] },
+  { lines: ["w-4/5"] },
+  { lines: ["w-1/2", "w-3/4", "w-2/5"] },
+  { lines: ["w-3/5"] },
+  { lines: ["w-4/5", "w-1/3"] },
+];
+
+function SkeletonLog() {
+  return (
+    <div className="flex-1 overflow-y-auto px-4 py-2 animate-pulse">
+      <div className="flex items-center gap-3 my-3">
+        <div className="flex-1 h-px bg-zk-border/20" />
+        <div className="h-2 w-8 rounded-sm bg-zk-border/20" />
+        <div className="flex-1 h-px bg-zk-border/20" />
+      </div>
+
+      {SKELETON_ROWS.map((row, i) => (
+        <div key={i} className="flex items-start gap-3 py-1">
+          {/* Avatar */}
+          <div className="w-7 h-7 rounded-sm shrink-0 mt-0.5 bg-zk-border/25 border border-zk-border/20" />
+
+          <div className="flex-1 min-w-0 space-y-1.5">
+            {/* Header: name + timestamp */}
+            <div className="flex items-baseline gap-2">
+              <div className="h-2.5 w-20 rounded-sm bg-zk-border/30" />
+              <div className="h-2 w-8 rounded-sm bg-zk-border/20" />
+            </div>
+
+            {/* Message lines */}
+            {row.lines.map((w, j) => (
+              <div key={j} className={cn("h-2.5 rounded-sm bg-zk-border/20", w)} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Date label ───────────────────────────────────────────────
+function dateLabel(isoDate: string): string {
+  const today     = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  if (isoDate === today)     return "Today";
+  if (isoDate === yesterday) return "Yesterday";
+  return new Date(isoDate).toLocaleDateString(undefined, {
+    month: "short", day: "numeric", year: "numeric",
+  });
+}
+
 // ─── Component ────────────────────────────────────────────────
 export function MessageLog({
-  messages, canDelete, onDelete, currentUserId,
+  messages, canDelete, onDelete, currentUserId, loading,
 }: MessageLogProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const groups = useMemo(() => buildGroups(messages), [messages]);
+  // Produce a flat list of { kind: "separator" | "group" } items grouped by date
+  const items = useMemo(() => {
+    type Item =
+      | { kind: "separator"; date: string }
+      | { kind: "group";     group: MessageGroup };
+
+    const byDate = new Map<string, ChatMessage[]>();
+    for (const msg of messages) {
+      const d = msg.date ?? new Date().toISOString().slice(0, 10);
+      if (!byDate.has(d)) byDate.set(d, []);
+      byDate.get(d)!.push(msg);
+    }
+
+    const result: Item[] = [];
+    for (const [date, msgs] of [...byDate.entries()].sort()) {
+      result.push({ kind: "separator", date });
+      for (const group of buildGroups(msgs)) {
+        result.push({ kind: "group", group });
+      }
+    }
+    return result;
+  }, [messages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
+
+  if (loading) return <SkeletonLog />;
 
   if (messages.length === 0) {
     return (
@@ -230,9 +306,11 @@ export function MessageLog({
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-2">
-      <DateSeparator label="Today" />
-
-      {groups.map((group) => {
+      {items.map((item) => {
+        if (item.kind === "separator") {
+          return <DateSeparator key={`sep-${item.date}`} label={dateLabel(item.date)} />;
+        }
+        const { group } = item;
         if (group.type === "system") {
           return <SystemLine key={group.id} msg={group.messages[0]} />;
         }

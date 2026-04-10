@@ -13,7 +13,8 @@ export interface Channel {
 export interface ChatMessage {
   id:        string;
   channel:   string;
-  timestamp: string;
+  timestamp: string; // HH:MM:SS
+  date:      string; // YYYY-MM-DD
   user:      string;
   userId:    string;
   text:      string;
