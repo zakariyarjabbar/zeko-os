@@ -1,6 +1,8 @@
 // app/api/users/route.ts
 // GET  /api/users — list users  (moderator | admin | Administrator)
 // POST /api/users — create user (admin | Administrator)
+//
+// display_id is assigned automatically by the DB sequence — never passed from the client.
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
@@ -22,7 +24,7 @@ export async function GET() {
 
   const { data: profiles } = await supabaseAdmin
     .from("profiles")
-    .select("id, display_id, username, first_name, last_name, alias, department, access_flags, session_status");
+    .select("id, display_id, display_name, username, access_flags, session_status");
 
   const { data: userRoles } = await supabaseAdmin
     .from("user_roles")
@@ -65,52 +67,54 @@ export async function POST(req: NextRequest) {
   }
 
   let body: {
-    email?:       string;
-    password?:    string;
-    firstName?:   string;
-    lastName?:    string;
-    username?:    string;
-    role?:        string;
-    displayId?:   string;
-    department?:  string;
-    accessFlags?: string[];
-    roleIds?:     string[];
+    email?:        string;
+    password?:     string;
+    username?:     string;
+    displayName?:  string;
+    role?:         string;
+    accessFlags?:  string[];
+    roleIds?:      string[];
   };
 
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: "Invalid body." }, { status: 400 }); }
 
-  const { email, password, firstName, lastName, username, role,
-          displayId, department, accessFlags, roleIds } = body;
+  const { email, password, username, displayName, role, accessFlags, roleIds } = body;
 
-  if (!email?.trim() || !password || !firstName?.trim() || !username?.trim()) {
-    return NextResponse.json({ error: "email, password, firstName, and username are required." }, { status: 400 });
+  if (!email?.trim() || !password || !username?.trim()) {
+    return NextResponse.json(
+      { error: "email, password, and username are required." },
+      { status: 400 },
+    );
   }
   if (password.length < 8) {
     return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
+  }
+
+  // display_name: letters, numbers, spaces — max one space
+  const cleanDisplayName = (displayName ?? "").trim();
+  if (cleanDisplayName && (cleanDisplayName.match(/ /g) ?? []).length > 1) {
+    return NextResponse.json({ error: "Display name may contain at most one space." }, { status: 400 });
   }
 
   const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
     email:         email.trim().toLowerCase(),
     password,
     email_confirm: true,
-    user_metadata: { name: `${firstName} ${lastName ?? ""}`.trim(), role: role ?? "user" },
+    user_metadata: { name: cleanDisplayName || username.trim(), role: role ?? "user" },
   });
 
   if (authError) return NextResponse.json({ error: authError.message }, { status: 400 });
 
   const userId = authData.user.id;
 
+  // display_id is intentionally omitted — the DB sequence assigns it automatically
   const { error: profileError } = await supabaseAdmin
     .from("profiles")
     .insert({
       id:             userId,
-      display_id:     displayId   ?? "user-0",
+      display_name:   cleanDisplayName,
       username:       username.trim(),
-      first_name:     firstName.trim(),
-      last_name:      lastName?.trim() ?? "",
-      alias:          username.trim(),
-      department:     department  ?? "Unassigned",
       access_flags:   accessFlags ?? [],
       session_status: "OFFLINE",
       last_login_ip:  "0.0.0.0",

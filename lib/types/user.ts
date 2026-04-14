@@ -1,15 +1,13 @@
 // lib/types/user.ts
 // Canonical User type used across the system.
-// display_id follows the format: <role>-<sequence>  e.g. root-1, operator-2
+// display_id is an auto-incrementing integer starting at 1 (assigned by DB sequence).
 
-export type SessionStatus = "ONLINE" | "AWAY" | "OFFLINE";
+export type SessionStatus = "ONLINE" | "OFFLINE";
 
 export interface UserIdentity {
   username:    string;   // short handle e.g. "zeko"
-  firstName:   string;
-  lastName:    string;
   email:       string;
-  permissions: string[]; // e.g. ["ROOT_ACCESS", "SYS_ADMIN"]
+  permissions: string[]; // e.g. ["Administrator", "view:global-ops"]
 }
 
 export interface UserSession {
@@ -19,8 +17,8 @@ export interface UserSession {
 }
 
 export interface User {
-  id:          string;       // Supabase UUID — immutable, internal
-  displayId:   string;       // role-based sequential ID e.g. "root-1"
-  identity:    UserIdentity;
-  session:     UserSession;
+  id:        string;       // Supabase UUID — immutable, internal
+  displayId: number;       // sequential display number e.g. 1, 2, 3
+  identity:  UserIdentity;
+  session:   UserSession;
 }

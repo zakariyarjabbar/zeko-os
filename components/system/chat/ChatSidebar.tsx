@@ -5,7 +5,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Search, X, Plus, Lock, Hash, MessageCircle } from "lucide-react";
+import { Search, X, Plus, Lock, Hash } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Channel, type DMConversation } from "./types";
 
@@ -33,6 +33,7 @@ interface ChatSidebarProps {
   onRefreshDms:    () => void;
   loadingChannels?: boolean;
   loadingDms?:      boolean;
+  presence?:        Record<string, "ONLINE" | "OFFLINE">;
 }
 
 // ─── Skeletons ────────────────────────────────────────────────
@@ -103,7 +104,7 @@ function SectionLabel({
 // ─── Component ────────────────────────────────────────────────
 export function ChatSidebar({
   channels, activeChannel, onSelect, dmConvos, activeDmUser, onRefreshDms,
-  loadingChannels, loadingDms,
+  loadingChannels, loadingDms, presence = {},
 }: ChatSidebarProps) {
   const [searching,     setSearching]     = useState(false);
   const [query,         setQuery]         = useState("");
@@ -317,9 +318,12 @@ export function ChatSidebar({
                 {/* Top row: handle + time */}
                 <div className="flex items-center justify-between gap-1 mb-0.5">
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <MessageCircle size={10} className={cn(
-                      "shrink-0",
-                      active ? "text-zk-green" : "text-zk-muted/40"
+                    {/* Live presence dot */}
+                    <span className={cn(
+                      "w-1.5 h-1.5 rounded-full shrink-0 transition-colors duration-300",
+                      presence[dm.userId] === "ONLINE"
+                        ? active ? "bg-zk-green shadow-glow-sm" : "bg-zk-green"
+                        : "bg-zk-muted/30",
                     )} />
                     <span className={cn(
                       "font-mono text-[11px] truncate",

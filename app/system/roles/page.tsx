@@ -20,8 +20,7 @@ interface Role {
   permissions: string[]; created_at: string; userCount: number;
 }
 interface AssignedUser {
-  id: string; display_id: string; username: string;
-  first_name: string; last_name: string; session_status: string;
+  id: string; display_id: number; username: string; session_status: string;
 }
 interface RoleDetail extends Role { users: AssignedUser[]; }
 interface Permission  { id: string; name: string; description: string; created_at: string; }
@@ -473,10 +472,10 @@ function RolesTab({ permissions }: { permissions: Permission[] }) {
                               STATUS_DOT[u.session_status] ?? STATUS_DOT.OFFLINE,
                             )} />
                             <span className="font-mono text-[11px] text-zk-white">
-                              {[u.first_name, u.last_name].filter(Boolean).join(" ") || u.username}
+                              {u.username}
                             </span>
                             <span className="font-mono text-[10px] text-zk-muted/45">@{u.username}</span>
-                            <span className="ml-auto font-mono text-[9px] text-zk-green/50">{u.display_id}</span>
+                            <span className="ml-auto font-mono text-[9px] text-zk-green/50">#{u.display_id}</span>
                           </div>
                         ))}
                       </div>

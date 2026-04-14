@@ -38,7 +38,7 @@ export async function GET(
   if (userIds.length > 0) {
     const { data: profiles } = await supabaseAdmin
       .from("profiles")
-      .select("id, display_id, username, first_name, last_name, session_status")
+      .select("id, display_id, username, session_status")
       .in("id", userIds);
     users = profiles ?? [];
   }

@@ -1,57 +1,66 @@
-// app/login/page.tsx
-// Terminal-style login screen — email + password only.
-// No sign-up link; accounts are admin-generated.
-// On success → /system/overview via client-side router push.
+// app/signup/page.tsx
+// Terminal-style self-service signup screen.
+// Fields: Email → Password → Display Name → Create Account
 
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { AlertTriangle, ArrowLeft } from "lucide-react";
-import Link from "next/link";
-import { GlassCard } from "@/components/ui/GlassCard";
-import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
-import { cn } from "@/lib/utils";
+import { useRouter }           from "next/navigation";
+import { AlertTriangle, ArrowLeft, UserPlus } from "lucide-react";
+import Link                    from "next/link";
+import { GlassCard }           from "@/components/ui/GlassCard";
+import { Button }              from "@/components/ui/Button";
+import { Badge }               from "@/components/ui/Badge";
+import { cn }                  from "@/lib/utils";
 
-// ─── Typing boot lines ────────────────────────────────────────
+// ─── Boot lines ───────────────────────────────────────────────
 const BOOT_LINES = [
   "> KERNEL_VERSION=1.0.0",
   "> LOADING modules...",
-  "> AUTH_MODULE status: ready",
-  "> Awaiting credentials...",
+  "> SIGNUP_MODULE status: ready",
+  "> Enter registration data...",
 ];
 
-// ─── Minimal field wrapper ─────────────────────────────────────
+// ─── Terminal field ───────────────────────────────────────────
 function TerminalField({
   id,
   label,
+  hint,
   type,
   value,
   onChange,
   placeholder,
   disabled,
   autoFocus,
+  autoComplete,
 }: {
-  id: string;
-  label: string;
-  type: string;
-  value: string;
-  onChange: (v: string) => void;
+  id:           string;
+  label:        string;
+  hint?:        string;
+  type:         string;
+  value:        string;
+  onChange:     (v: string) => void;
   placeholder?: string;
-  disabled?: boolean;
-  autoFocus?: boolean;
+  disabled?:    boolean;
+  autoFocus?:   boolean;
+  autoComplete?: string;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label
-        htmlFor={id}
-        className="font-mono text-[11px] text-zk-muted tracking-widest uppercase"
-      >
-        {label}
-      </label>
+      <div className="flex items-baseline justify-between">
+        <label
+          htmlFor={id}
+          className="font-mono text-[11px] text-zk-muted tracking-widest uppercase"
+        >
+          {label}
+        </label>
+        {hint && (
+          <span className="font-mono text-[10px] text-zk-muted/40 tracking-wider">
+            {hint}
+          </span>
+        )}
+      </div>
       <div className="relative">
-        {/* Prompt glyph */}
         <span
           aria-hidden="true"
           className="absolute left-3 top-1/2 -translate-y-1/2 font-mono text-zk-green text-sm select-none"
@@ -66,7 +75,7 @@ function TerminalField({
           placeholder={placeholder}
           disabled={disabled}
           autoFocus={autoFocus}
-          autoComplete={type === "password" ? "current-password" : "email"}
+          autoComplete={autoComplete}
           className={cn(
             "w-full pl-8 pr-4 py-2.5",
             "bg-zk-surface/60 border border-zk-border rounded-sm",
@@ -83,14 +92,16 @@ function TerminalField({
 }
 
 // ─── Component ────────────────────────────────────────────────
-export default function LoginPage() {
+export default function SignupPage() {
   const router = useRouter();
-  const [email, setEmail]       = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError]       = useState<string | null>(null);
-  const [loading, setLoading]   = useState(false);
 
-  // Boot sequence display
+  const [email,       setEmail]       = useState("");
+  const [password,    setPassword]    = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [error,       setError]       = useState<string | null>(null);
+  const [loading,     setLoading]     = useState(false);
+
+  // Boot sequence
   const [bootLines, setBootLines] = useState<string[]>([]);
   const bootDone = bootLines.length >= BOOT_LINES.length;
 
@@ -106,33 +117,52 @@ export default function LoginPage() {
     setTimeout(tick, 200);
   }, []);
 
+  // ── Client-side display name validation ─────────────────────
+  function validateDisplayName(name: string): string | null {
+    const trimmed = name.trim();
+    if (!trimmed) return "Display name is required.";
+    if ((trimmed.match(/ /g) ?? []).length > 1)
+      return "Display name may contain at most one space.";
+    return null;
+  }
+
   // ── Submit ──────────────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
-    if (!email.trim() || !password) {
-      setError("Both fields are required.");
+    if (!email.trim() || !password || !displayName.trim()) {
+      setError("All fields are required.");
       return;
     }
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+    const dnErr = validateDisplayName(displayName);
+    if (dnErr) { setError(dnErr); return; }
 
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
+      const res = await fetch("/api/auth/signup", {
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), password }),
+        body:    JSON.stringify({
+          email:       email.trim(),
+          password,
+          displayName: displayName.trim(),
+        }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error ?? "Login failed.");
+        setError(data.error ?? "Signup failed. Please try again.");
         return;
       }
 
-      // Redirect — hard push so the system layout does a fresh load
-      router.push("/system/overview");
+      // data.redirect means auto-login failed — send them to login
+      router.push(data.redirect ?? "/system/overview");
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -163,14 +193,14 @@ export default function LoginPage() {
       {/* ── Card ─────────────────────────────────────────────── */}
       <div className="relative z-10 w-full max-w-md animate-fade-in-up">
 
-        {/* Back to landing */}
+        {/* Back to login */}
         <div className="mb-4">
           <Link
-            href="/"
+            href="/login"
             className="inline-flex items-center gap-1.5 font-mono text-xs text-zk-muted hover:text-zk-green transition-colors duration-150 group"
           >
             <ArrowLeft size={13} className="group-hover:-translate-x-0.5 transition-transform duration-150" />
-            Back to landing
+            Back to login
           </Link>
         </div>
 
@@ -184,19 +214,18 @@ export default function LoginPage() {
             Zeko OS — v1.0.0
           </span>
           <Badge variant="green" className="ml-auto">
-            AUTH
+            REGISTER
           </Badge>
         </div>
 
         <GlassCard featured>
-          {/* Boot sequence terminal */}
+          {/* Boot terminal */}
           <div className="mb-6 font-mono text-[11px] text-zk-muted leading-relaxed space-y-0.5 min-h-[72px]">
             {bootLines.map((line, i) => (
               <div key={i} className="flex items-center gap-1">
                 <span className="text-zk-green/60">{line}</span>
               </div>
             ))}
-            {/* Blinking cursor while booting */}
             {!bootDone && (
               <span
                 aria-hidden="true"
@@ -210,32 +239,46 @@ export default function LoginPage() {
 
           {/* Headline */}
           <h1 className="font-mono text-lg text-zk-white mb-1 tracking-tight">
-            System Access
+            Create Account
           </h1>
           <p className="font-mono text-xs text-zk-muted mb-6">
-            Enter your credentials to authenticate.
+            Register a new identity on the system.
           </p>
 
           {/* Form */}
           <form onSubmit={handleSubmit} noValidate className="space-y-4">
             <TerminalField
               id="email"
-              label="Identifier"
+              label="Email Address"
               type="email"
               value={email}
               onChange={setEmail}
               placeholder="user@zeko.os"
               disabled={loading}
               autoFocus
+              autoComplete="email"
             />
             <TerminalField
               id="password"
               label="Access Key"
+              hint="min. 8 characters"
               type="password"
               value={password}
               onChange={setPassword}
               placeholder="••••••••"
               disabled={loading}
+              autoComplete="new-password"
+            />
+            <TerminalField
+              id="displayName"
+              label="Display Name"
+              hint="letters, numbers, one space"
+              type="text"
+              value={displayName}
+              onChange={setDisplayName}
+              placeholder="John Doe"
+              disabled={loading}
+              autoComplete="off"
             />
 
             {/* Error */}
@@ -253,20 +296,25 @@ export default function LoginPage() {
               className="w-full mt-2"
               isLoading={loading}
             >
-              {loading ? "Authenticating..." : "Authenticate"}
+              {loading ? "Creating account..." : (
+                <span className="flex items-center justify-center gap-2">
+                  <UserPlus size={14} />
+                  Create Account
+                </span>
+              )}
             </Button>
           </form>
 
-          {/* Footer — signup link */}
+          {/* Footer — link back to login */}
           <p className="mt-5 font-mono text-[10px] text-zk-muted/60 text-center tracking-wider">
-            No account?{" "}
-            <Link href="/signup" className="text-zk-green hover:underline">
-              Create one
+            Already have an account?{" "}
+            <Link href="/login" className="text-zk-green hover:underline">
+              Sign in
             </Link>
           </p>
         </GlassCard>
 
-        {/* System status line */}
+        {/* System status */}
         <p className="mt-4 font-mono text-[10px] text-zk-muted/50 text-center tracking-widest">
           ARCH=x86_64 &nbsp;|&nbsp; ENV=PRODUCTION &nbsp;|&nbsp; UPTIME 99.97%
         </p>

@@ -39,7 +39,7 @@ export function canCreateUsers(flags: string[]): boolean {
 }
 
 // Can edit a user's profile
-// moderator: limited fields only (firstName, lastName, username, displayId, password, department)
+// moderator: limited fields only (username, password)
 // admin/Administrator: all fields, but blocked on Administrator-flagged targets
 export function canEditUsers(flags: string[]): boolean {
   return flags.includes(ADMIN_PERMISSION)
@@ -54,5 +54,5 @@ export function canDeleteUsers(flags: string[]): boolean {
 
 // Moderator-only fields (subset of edit)
 export const MODERATOR_EDITABLE_FIELDS = new Set([
-  "firstName", "lastName", "username", "displayId", "password", "department",
+  "username", "password",
 ]);

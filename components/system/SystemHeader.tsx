@@ -105,6 +105,9 @@ export function SystemHeader({ session, profile }: SystemHeaderProps) {
 
   async function handleLogout() {
     setLoggingOut(true);
+    // Set offline first while the session cookie is still valid,
+    // then clear the session and redirect.
+    await fetch("/api/presence", { method: "DELETE" });
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
   }

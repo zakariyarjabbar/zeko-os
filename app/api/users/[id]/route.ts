@@ -1,11 +1,13 @@
 // app/api/users/[id]/route.ts
-// PATCH  /api/users/:id — update user  (moderator: limited fields | admin | Administrator)
+// PATCH  /api/users/:id — update user  (moderator: username+password | admin | Administrator)
 // DELETE /api/users/:id — delete user  (admin | Administrator)
 //
 // Protection rules:
-//  - moderator: can only edit MODERATOR_EDITABLE_FIELDS, blocked on Administrator-flagged targets
-//  - admin: all fields, blocked on Administrator-flagged targets
+//  - moderator: can only edit MODERATOR_EDITABLE_FIELDS (username, password), blocked on Administrator-flagged targets
+//  - admin: all profile fields, blocked on Administrator-flagged targets
 //  - Administrator: all fields, no restrictions
+//
+// display_id is never editable — it is permanently assigned by the DB sequence on account creation.
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
@@ -46,37 +48,39 @@ export async function PATCH(
   }
 
   let body: {
-    firstName?:   string;
-    lastName?:    string;
-    username?:    string;
-    displayId?:   string;
-    department?:  string;
-    accessFlags?: string[];
-    roleIds?:     string[];
-    password?:    string;
+    username?:     string;
+    displayName?:  string;
+    accessFlags?:  string[];
+    roleIds?:      string[];
+    password?:     string;
   };
 
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: "Invalid body." }, { status: 400 }); }
 
   const isModerator = actorFlags.includes("moderator") && !actorFlags.includes("admin") && !isFounder(actorFlags);
-  const isAdmin     = actorFlags.includes("admin") && !isFounder(actorFlags);
 
   // ── Profile fields ────────────────────────────────────────
   const profileUpdate: Record<string, unknown> = {};
 
+  // Validate display_name if provided
+  if (body.displayName !== undefined) {
+    const dn = body.displayName.trim();
+    if ((dn.match(/ /g) ?? []).length > 1) {
+      return NextResponse.json({ error: "Display name may contain at most one space." }, { status: 400 });
+    }
+    body.displayName = dn;
+  }
+
   const fieldMap: Record<string, string> = {
-    firstName:  "first_name",
-    lastName:   "last_name",
-    username:   "username",
-    displayId:  "display_id",
-    department: "department",
+    username:    "username",
+    displayName: "display_name",
   };
 
   for (const [key, col] of Object.entries(fieldMap)) {
     const val = body[key as keyof typeof body];
     if (val === undefined) continue;
-    if (isModerator && !MODERATOR_EDITABLE_FIELDS.has(key)) continue; // blocked for moderator
+    if (isModerator && !MODERATOR_EDITABLE_FIELDS.has(key)) continue;
     profileUpdate[col] = val;
   }
 
@@ -109,7 +113,6 @@ export async function PATCH(
     if (body.password.length < 8) {
       return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
     }
-    // Moderators can change passwords, admins and admins too
     const { error } = await supabaseAdmin.auth.admin.updateUserById(id, { password: body.password });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }

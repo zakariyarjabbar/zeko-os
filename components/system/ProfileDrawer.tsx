@@ -89,8 +89,7 @@ export function ProfileDrawer({ open, profile, onClose }: ProfileDrawerProps) {
   const [terminating, setTerminating] = useState(false);
 
   const status     = STATUS_CONFIG[profile.sessionStatus] ?? STATUS_CONFIG.OFFLINE;
-  const fullName   = [profile.firstName, profile.lastName].filter(Boolean).join(" ") || profile.username;
-  const initial    = (profile.firstName || profile.username).charAt(0).toUpperCase();
+  const initial    = profile.username.charAt(0).toUpperCase();
   const lastActive = new Date(profile.lastActive).toLocaleTimeString([], {
     hour: "2-digit", minute: "2-digit", second: "2-digit",
   });
@@ -178,18 +177,16 @@ export function ProfileDrawer({ open, profile, onClose }: ProfileDrawerProps) {
                   />
                 </div>
 
-                {/* Name + username + display ID */}
-                <div className="text-center space-y-0.5">
+                {/* Display name + username badge */}
+                <div className="text-center space-y-1.5">
+                  {/* Display name — primary identity */}
                   <div className="font-mono text-sm font-semibold text-zk-white tracking-wide">
-                    {fullName}
+                    {profile.displayName || profile.username}
                   </div>
-                  <div className="font-mono text-[11px] text-zk-green/70">
-                    @{profile.username}
-                  </div>
-                  {/* Display ID badge */}
-                  <div className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-sm border border-zk-green/20 bg-zk-green/5">
+                  {/* @username in green box */}
+                  <div className="inline-flex items-center px-2.5 py-0.5 rounded-sm border border-zk-green/35 bg-zk-green/10">
                     <span className="font-mono text-[10px] text-zk-green tracking-widest">
-                      {profile.displayId}
+                      @{profile.username}
                     </span>
                   </div>
                 </div>
@@ -200,11 +197,11 @@ export function ProfileDrawer({ open, profile, onClose }: ProfileDrawerProps) {
               {/* ── Identity block ────────────────────────── */}
               <div className="px-5 py-4 border-b border-zk-border/50">
                 <SectionHeader>Identity</SectionHeader>
-                <DataRow label="Display ID" value={profile.displayId}  accent />
-                <DataRow label="Username"   value={profile.username}   accent />
-                <DataRow label="Email"      value={profile.email}              />
-                <DataRow label="Role"       value={profile.role}       accent />
-                <DataRow label="Dept"       value={profile.department}         />
+                <DataRow label="Display ID"   value={profile.displayId > 0 ? `#${profile.displayId}` : "—"} accent />
+                <DataRow label="Display Name" value={profile.displayName || "—"} />
+                <DataRow label="Username"     value={profile.username}   accent />
+                <DataRow label="Email"        value={profile.email}              />
+                <DataRow label="Role"         value={profile.role}       accent />
 
               </div>
 

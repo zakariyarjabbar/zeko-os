@@ -1,6 +1,6 @@
 // app/api/chat/users-search/route.ts
 // GET /api/chat/users-search?q=query
-// Search users by username, first_name, last_name, or email.
+// Search users by username or email.
 // Used for starting new DM conversations.
 
 import { NextRequest, NextResponse } from "next/server";
@@ -14,12 +14,12 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get("q")?.trim().toLowerCase() ?? "";
   if (q.length < 1) return NextResponse.json([]);
 
-  // Search profiles
+  // Search profiles by username
   const { data: profiles } = await supabaseAdmin
     .from("profiles")
-    .select("id, username, first_name, last_name, session_status")
-    .or(`username.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%`)
-    .neq("id", session.id)  // exclude self
+    .select("id, username, session_status")
+    .ilike("username", `%${q}%`)
+    .neq("id", session.id)
     .limit(10);
 
   // Also search by email via auth
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     .filter((u) => u.email?.toLowerCase().includes(q) && u.id !== session.id)
     .map((u) => u.id);
 
-  // Merge: profiles matching name/username + profiles for email matches
+  // Merge: profiles matching username + profiles for email matches
   const profileIds = new Set([
     ...(profiles ?? []).map((p: { id: string }) => p.id),
     ...emailMatches,
@@ -38,18 +38,16 @@ export async function GET(req: NextRequest) {
 
   const { data: merged } = await supabaseAdmin
     .from("profiles")
-    .select("id, username, first_name, last_name, session_status")
+    .select("id, username, session_status")
     .in("id", [...profileIds]);
 
   // Attach emails
   const emailMap = new Map((authData?.users ?? []).map((u) => [u.id, u.email]));
 
-  const result = (merged ?? []).map((p: {
-    id: string; username: string; first_name: string; last_name: string; session_status: string;
-  }) => ({
+  const result = (merged ?? []).map((p: { id: string; username: string; session_status: string }) => ({
     id:       p.id,
     username: p.username,
-    name:     `${p.first_name} ${p.last_name}`.trim() || p.username,
+    name:     p.username,
     email:    emailMap.get(p.id) ?? "",
     status:   p.session_status,
   }));

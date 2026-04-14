@@ -6,33 +6,30 @@
 // │  SIDEBAR  │  page content            │
 // └──────────────────────────────────────┘
 
-import { getSession }      from "@/lib/auth";
-import { buildProfile }    from "@/lib/profile";
-import { redirect }        from "next/navigation";
-import { SystemSidebar }   from "@/components/system/SystemSidebar";
-import { SystemHeader }    from "@/components/system/SystemHeader";
-import { SessionProvider } from "@/components/system/SessionContext";
-import type { UserProfile } from "@/lib/profile";
+import { getSession }        from "@/lib/auth";
+import { buildProfile }      from "@/lib/profile";
+import { redirect }          from "next/navigation";
+import { SystemSidebar }     from "@/components/system/SystemSidebar";
+import { SystemHeader }      from "@/components/system/SystemHeader";
+import { SessionProvider }   from "@/components/system/SessionContext";
+import { PresenceTracker }   from "@/components/system/PresenceTracker";
+import { DisplayNameGate }   from "@/components/system/DisplayNameGate";
+import type { UserProfile }  from "@/lib/profile";
 
 // Fallback profile when DB is unreachable
 function fallbackProfile(session: { id: string; email: string; name: string; role: string }): UserProfile {
   return {
-    id:             session.id,
-    displayId:      "user-0",
-    email:          session.email,
-    username:       session.name.toLowerCase().replace(" ", "."),
-    firstName:      session.name,
-    lastName:       "",
-    role:           session.role.toUpperCase(),
-    alias:          session.name.toLowerCase().replace(" ", "."),
-
-    department:     "Unassigned",
-
-    accessFlags:    ["READ_LOGS"],
-    sessionStatus:  "OFFLINE",
-    lastLoginIp:    "0.0.0.0",
-    lastActive:     new Date().toISOString(),
-    sessionStart:   Date.now(),
+    id:            session.id,
+    displayId:     0,
+    displayName:   "",
+    email:         session.email,
+    username:      session.name.toLowerCase().replace(/\s+/g, "."),
+    role:          session.role.toUpperCase(),
+    accessFlags:   [],
+    sessionStatus: "OFFLINE",
+    lastLoginIp:   "0.0.0.0",
+    lastActive:    new Date().toISOString(),
+    sessionStart:  Date.now(),
   };
 }
 
@@ -57,6 +54,9 @@ export default async function SystemLayout({
 
   return (
     <SessionProvider session={session} profile={profile}>
+      <PresenceTracker />
+      {/* Blocking gate — renders only when display_name is empty */}
+      <DisplayNameGate initialDisplayName={profile.displayName} />
       <div className="fixed inset-0 flex flex-col bg-zk-bg overflow-hidden">
         <SystemHeader profile={profile} session={session} />
         <div className="flex flex-1 overflow-hidden">

@@ -6,22 +6,30 @@ export type Database = {
     Tables: {
       profiles: {
         Row: {
-          id:           string;
-          alias:        string;
-          department:   string;
-          access_flags: string[];
-          created_at:   string;
+          id:             string;
+          display_id:     number;
+          username:       string;
+          access_flags:   string[];
+          session_status: string;
+          last_login_ip:  string;
+          last_active:    string;
+          created_at:     string;
         };
         Insert: {
-          id:            string;
-          alias?:        string;
-          department?:   string;
-          access_flags?: string[];
+          id:              string;
+          username:        string;
+          access_flags?:   string[];
+          session_status?: string;
+          last_login_ip?:  string;
+          last_active?:    string;
+          // display_id is omitted — assigned automatically by DB sequence
         };
         Update: {
-          alias?:        string;
-          department?:   string;
-          access_flags?: string[];
+          username?:       string;
+          access_flags?:   string[];
+          session_status?: string;
+          last_login_ip?:  string;
+          last_active?:    string;
         };
       };
       channels: {

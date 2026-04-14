@@ -20,9 +20,12 @@ import { canCreateUsers, canDeleteUsers, isFounder } from "@/lib/permissions";
 interface Permission { id: string; name: string; description: string; }
 interface Role       { id: string; name: string; }
 interface UserProfile {
-  id: string; display_id: string; username: string;
-  first_name: string; last_name: string; alias: string;
-  department: string; access_flags: string[]; session_status: string;
+  id:             string;
+  display_id:     number;
+  display_name:   string;
+  username:       string;
+  access_flags:   string[];
+  session_status: string;
 }
 interface UserRow {
   id: string; email: string; emailConfirmed: boolean;
@@ -30,25 +33,16 @@ interface UserRow {
   profile: UserProfile | null; roles: Role[];
 }
 
-// ─── Constants ────────────────────────────────────────────────
-const DEPARTMENTS = [
-  "Core Systems", "Operations", "Engineering",
-  "Security", "Infrastructure", "Research", "Unassigned",
-];
-
 const STATUS_DOT: Record<string, string> = {
   ONLINE:  "bg-zk-green shadow-glow-sm",
-  AWAY:    "bg-zk-amber",
   OFFLINE: "bg-zk-muted/40",
 };
 
-type StatusFilter = "ALL" | "ONLINE" | "AWAY" | "OFFLINE";
+type StatusFilter = "ALL" | "ONLINE" | "OFFLINE";
 type RightMode    = null | "dossier" | "create" | "edit";
 
 // ─── Helpers ──────────────────────────────────────────────────
-function getInitials(first: string, last: string, username: string) {
-  if (first && last) return `${first[0]}${last[0]}`.toUpperCase();
-  if (first) return first.slice(0, 2).toUpperCase();
+function getInitials(username: string) {
   return (username || "??").slice(0, 2).toUpperCase();
 }
 
@@ -74,8 +68,8 @@ function timeAgo(iso: string | null | undefined) {
 
 function blankForm() {
   return {
-    email: "", password: "", firstName: "", lastName: "",
-    username: "", displayId: "", department: "Unassigned",
+    email: "", password: "",
+    username: "", displayName: "",
     accessFlags: [] as string[], roleIds: [] as string[],
   };
 }
@@ -113,22 +107,6 @@ function TextInput({ value, onChange, placeholder, type = "text", disabled }: {
   );
 }
 
-function SelectField({ value, onChange, options }: {
-  value: string; onChange: (v: string) => void; options: string[];
-}) {
-  return (
-    <select
-      value={value} onChange={(e) => onChange(e.target.value)}
-      className={cn(
-        "w-full px-3 py-2 rounded-sm border bg-zk-surface/60 border-zk-border",
-        "font-mono text-xs text-zk-white outline-none focus:border-zk-green/50 transition-colors",
-      )}
-    >
-      {options.map((o) => <option key={o} value={o}>{o}</option>)}
-    </select>
-  );
-}
-
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <p className="flex items-center gap-1.5 font-mono text-[9px] text-zk-muted/35 tracking-[0.22em] uppercase mb-3">
@@ -149,9 +127,9 @@ function DRow({ label, value }: { label: string; value: React.ReactNode }) {
 
 function StatusBadge({ status }: { status: string }) {
   const cls =
-    status === "ONLINE"  ? "border-zk-green/30 bg-zk-green/8 text-zk-green"   :
-    status === "AWAY"    ? "border-zk-amber/30 bg-zk-amber/8 text-zk-amber"   :
-                           "border-zk-muted/20 bg-transparent text-zk-muted/50";
+    status === "ONLINE"
+      ? "border-zk-green/30 bg-zk-green/8 text-zk-green"
+      : "border-zk-muted/20 bg-transparent text-zk-muted/50";
   return (
     <span className={cn(
       "inline-flex items-center gap-1.5 font-mono text-[9px] tracking-widest",
@@ -215,6 +193,9 @@ export default function UsersPage() {
   const [search,       setSearch]       = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
 
+  // presence — live ONLINE/OFFLINE per user id
+  const [presence, setPresence] = useState<Record<string, "ONLINE" | "OFFLINE">>({});
+
   // ── Data fetching ──────────────────────────────────────────
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -231,22 +212,44 @@ export default function UsersPage() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  const fetchPresence = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return;
+    try {
+      const res = await fetch(`/api/presence?ids=${ids.join(",")}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (typeof data === "object" && !Array.isArray(data) && !("error" in data)) {
+        setPresence(data as Record<string, "ONLINE" | "OFFLINE">);
+      }
+    } catch { /* silent */ }
+  }, []);
+
+  useEffect(() => {
+    const ids = users.map((u) => u.id);
+    fetchPresence(ids);
+  }, [users, fetchPresence]);
+
+  useEffect(() => {
+    const ids = users.map((u) => u.id);
+    if (ids.length === 0) return;
+    const id = setInterval(() => fetchPresence(ids), 20_000);
+    return () => clearInterval(id);
+  }, [users, fetchPresence]);
+
   // ── Derived data ───────────────────────────────────────────
   const filtered = useMemo(() => users.filter((u) => {
     const hay = [
-      u.profile?.first_name, u.profile?.last_name,
-      u.profile?.username,   u.profile?.display_id,
-      u.email, ...u.roles.map((r) => r.name),
-      u.profile?.department,
+      u.profile?.username,
+      u.email,
+      ...u.roles.map((r) => r.name),
     ].filter(Boolean).join(" ").toLowerCase();
     const matchSearch = !search || hay.includes(search.toLowerCase());
-    const st = u.profile?.session_status ?? "OFFLINE";
+    const st = presence[u.id] ?? "OFFLINE";
     return matchSearch && (statusFilter === "ALL" || st === statusFilter);
-  }), [users, search, statusFilter]);
+  }), [users, search, statusFilter, presence]);
 
-  const onlineCount  = users.filter((u) => u.profile?.session_status === "ONLINE").length;
-  const awayCount    = users.filter((u) => u.profile?.session_status === "AWAY").length;
-  const offlineCount = users.length - onlineCount - awayCount;
+  const onlineCount  = users.filter((u) => presence[u.id] === "ONLINE").length;
+  const offlineCount = users.length - onlineCount;
 
   // ── Actions ────────────────────────────────────────────────
   function openDossier(user: UserRow) {
@@ -266,15 +269,12 @@ export default function UsersPage() {
   function openEdit(user: UserRow) {
     setSelected(user);
     setForm({
-      email:       user.email,
-      password:    "",
-      firstName:   user.profile?.first_name  ?? "",
-      lastName:    user.profile?.last_name   ?? "",
-      username:    user.profile?.username    ?? "",
-      displayId:   user.profile?.display_id  ?? "",
-      department:  user.profile?.department  ?? "Unassigned",
-      accessFlags: user.profile?.access_flags ?? [],
-      roleIds:     user.roles.map((r) => r.id),
+      email:        user.email,
+      password:     "",
+      username:     user.profile?.username     ?? "",
+      displayName:  user.profile?.display_name ?? "",
+      accessFlags:  user.profile?.access_flags  ?? [],
+      roleIds:      user.roles.map((r) => r.id),
     });
     setRightMode("edit");
     setToast(null);
@@ -306,7 +306,14 @@ export default function UsersPage() {
       if (rightMode === "create") {
         const res  = await fetch("/api/users", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
+          body: JSON.stringify({
+            email:        form.email,
+            password:     form.password,
+            username:     form.username,
+            displayName:  form.displayName,
+            accessFlags:  form.accessFlags,
+            roleIds:      form.roleIds,
+          }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Failed to create user.");
@@ -318,10 +325,10 @@ export default function UsersPage() {
         const res  = await fetch(`/api/users/${selected.id}`, {
           method: "PATCH", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            firstName: form.firstName, lastName: form.lastName,
-            username:  form.username,  displayId: form.displayId,
-            department: form.department, accessFlags: form.accessFlags,
-            roleIds: form.roleIds,
+            username:     form.username,
+            displayName:  form.displayName,
+            accessFlags:  form.accessFlags,
+            roleIds:      form.roleIds,
             ...(form.password ? { password: form.password } : {}),
           }),
         });
@@ -370,12 +377,6 @@ export default function UsersPage() {
           <span className="w-1.5 h-1.5 rounded-full bg-zk-green shadow-glow-sm" />
           {onlineCount} online
         </span>
-        {awayCount > 0 && (
-          <span className="flex items-center gap-1.5 font-mono text-[10px] text-zk-amber/60">
-            <span className="w-1.5 h-1.5 rounded-full bg-zk-amber" />
-            {awayCount} away
-          </span>
-        )}
         <span className="flex items-center gap-1.5 font-mono text-[10px] text-zk-muted/30">
           <span className="w-1.5 h-1.5 rounded-full bg-zk-muted/30" />
           {offlineCount} offline
@@ -439,15 +440,13 @@ export default function UsersPage() {
 
             {/* Status pills */}
             <div className="flex gap-1">
-              {(["ALL", "ONLINE", "AWAY", "OFFLINE"] as StatusFilter[]).map((f) => {
+              {(["ALL", "ONLINE", "OFFLINE"] as StatusFilter[]).map((f) => {
                 const cnt =
                   f === "ALL"     ? users.length :
                   f === "ONLINE"  ? onlineCount  :
-                  f === "AWAY"    ? awayCount     :
                                     offlineCount;
                 const onStyle =
                   f === "ONLINE"  ? "border-zk-green/35 bg-zk-green/10 text-zk-green" :
-                  f === "AWAY"    ? "border-zk-amber/35 bg-zk-amber/10 text-zk-amber" :
                   f === "OFFLINE" ? "border-zk-muted/25 bg-zk-muted/5 text-zk-muted/55" :
                                     "border-zk-green/30 bg-zk-green/8 text-zk-green";
                 const label = f === "ALL" ? "All" : f[0] + f.slice(1).toLowerCase();
@@ -497,12 +496,9 @@ export default function UsersPage() {
             ) : (
               filtered.map((user) => {
                 const isActive = (rightMode === "dossier" || rightMode === "edit") && selected?.id === user.id;
-                const st       = user.profile?.session_status ?? "OFFLINE";
-                const first    = user.profile?.first_name ?? "";
-                const last     = user.profile?.last_name  ?? "";
-                const uname    = user.profile?.username ?? user.email.split("@")[0];
-                const flags    = user.profile?.access_flags ?? [];
-                const name     = [first, last].filter(Boolean).join(" ") || uname;
+                const st    = presence[user.id] ?? "OFFLINE";
+                const uname = user.profile?.username ?? user.email.split("@")[0];
+                const flags = user.profile?.access_flags ?? [];
 
                 return (
                   <button
@@ -523,7 +519,7 @@ export default function UsersPage() {
                         "font-mono text-[11px] font-bold",
                         getAvatarClass(flags),
                       )}>
-                        {getInitials(first, last, uname)}
+                        {getInitials(uname)}
                       </div>
                       <span className={cn(
                         "absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border-2",
@@ -535,15 +531,19 @@ export default function UsersPage() {
                     {/* Meta */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-0.5">
-                        <span className="font-mono text-[11px] text-zk-white font-medium truncate">{name}</span>
+                        <span className="font-mono text-[11px] text-zk-white font-medium truncate">
+                          {user.profile?.display_name || `@${uname}`}
+                        </span>
                         {flags.includes("Administrator") && (
                           <ShieldCheck size={9} className="text-zk-green shrink-0" />
                         )}
                       </div>
                       <p className="font-mono text-[10px] truncate">
-                        <span className="text-zk-green/55">{user.profile?.display_id ?? "—"}</span>
-                        <span className="text-zk-muted/30 mx-1">·</span>
-                        <span className="text-zk-muted/45">{user.profile?.department ?? "Unassigned"}</span>
+                        {user.profile?.display_id
+                          ? <span className="text-zk-green/55">#{user.profile.display_id}</span>
+                          : null}
+                        {user.profile?.display_id && <span className="text-zk-muted/30 mx-1">·</span>}
+                        <span className="text-zk-muted/40">{user.email}</span>
                       </p>
                       {user.roles.length > 0 && (
                         <p className="font-mono text-[9px] text-zk-muted/30 truncate mt-0.5">
@@ -600,33 +600,29 @@ export default function UsersPage() {
                 {/* Dossier header */}
                 <div className="shrink-0 flex items-center justify-between px-6 py-3 border-b border-zk-border/50 bg-zk-surface/15">
                   <div className="flex items-center gap-3">
-                    {/* Larger avatar */}
+                    {/* Avatar */}
                     <div className={cn(
                       "w-10 h-10 rounded-sm border flex items-center justify-center",
                       "font-mono text-sm font-bold relative",
                       getAvatarClass(selected.profile?.access_flags ?? []),
                     )}>
-                      {getInitials(
-                        selected.profile?.first_name ?? "",
-                        selected.profile?.last_name  ?? "",
-                        selected.profile?.username   ?? selected.email.split("@")[0],
-                      )}
+                      {getInitials(selected.profile?.username ?? selected.email.split("@")[0])}
                       <span className={cn(
                         "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-zk-surface",
-                        STATUS_DOT[selected.profile?.session_status ?? "OFFLINE"],
+                        STATUS_DOT[presence[selected.id] ?? "OFFLINE"],
                       )} />
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-sm font-semibold text-zk-white">
-                          {[selected.profile?.first_name, selected.profile?.last_name].filter(Boolean).join(" ")
-                            || selected.profile?.username || selected.email.split("@")[0]}
+                          @{selected.profile?.username ?? selected.email.split("@")[0]}
                         </span>
-                        <StatusBadge status={selected.profile?.session_status ?? "OFFLINE"} />
+                        <StatusBadge status={presence[selected.id] ?? "OFFLINE"} />
                       </div>
                       <p className="font-mono text-[10px] text-zk-muted/45 mt-0.5">
-                        <span className="text-zk-green/55">{selected.profile?.display_id ?? "—"}</span>
-                        {" · "}
+                        {selected.profile?.display_id
+                          ? <span className="text-zk-green/55">#{selected.profile.display_id} · </span>
+                          : null}
                         {selected.email}
                       </p>
                     </div>
@@ -669,12 +665,11 @@ export default function UsersPage() {
                       <div>
                         <SectionLabel>identity</SectionLabel>
                         <div className="space-y-0">
-                          <DRow label="Username" value={<span className="text-zk-green/80">@{selected.profile?.username ?? "—"}</span>} />
-                          <DRow label="Display ID" value={<span className="text-zk-green/80 font-bold">{selected.profile?.display_id ?? "—"}</span>} />
-                          <DRow label="Name" value={[selected.profile?.first_name, selected.profile?.last_name].filter(Boolean).join(" ") || "—"} />
-                          <DRow label="Department" value={selected.profile?.department ?? "Unassigned"} />
-                          <DRow label="Email" value={selected.email} />
-                          <DRow label="Confirmed" value={
+                          <DRow label="Display Name" value={selected.profile?.display_name || <span className="text-zk-muted/30 italic">not set</span>} />
+                          <DRow label="Username"     value={<span className="text-zk-green/80">@{selected.profile?.username ?? "—"}</span>} />
+                          <DRow label="Display ID"   value={<span className="text-zk-green/80 font-bold">#{selected.profile?.display_id ?? "—"}</span>} />
+                          <DRow label="Email"        value={selected.email} />
+                          <DRow label="Confirmed"  value={
                             selected.emailConfirmed
                               ? <span className="text-zk-green text-[10px]">✓ verified</span>
                               : <span className="text-zk-amber text-[10px]">⚠ unverified</span>
@@ -686,14 +681,14 @@ export default function UsersPage() {
                       <div>
                         <SectionLabel>session</SectionLabel>
                         <div className="space-y-0">
-                          <DRow label="Status" value={<StatusBadge status={selected.profile?.session_status ?? "OFFLINE"} />} />
+                          <DRow label="Status"      value={<StatusBadge status={presence[selected.id] ?? "OFFLINE"} />} />
                           <DRow label="Last active" value={
                             <span className="flex items-center gap-1.5">
                               <Clock size={9} className="text-zk-muted/40" />
                               {timeAgo(selected.lastSignIn)}
                             </span>
                           } />
-                          <DRow label="Created" value={timeAgo(selected.createdAt)} />
+                          <DRow label="Created"     value={timeAgo(selected.createdAt)} />
                         </div>
                       </div>
                     </div>
@@ -756,7 +751,7 @@ export default function UsersPage() {
                     <Edit3 size={13} className="text-zk-green" />
                     <span className="font-mono text-[11px] font-semibold text-zk-green tracking-widest">EDIT USER</span>
                     <span className="font-mono text-[10px] text-zk-muted/40 ml-1">
-                      {selected.profile?.display_id ?? selected.email}
+                      #{selected.profile?.display_id} @{selected.profile?.username ?? selected.email}
                     </span>
                   </div>
                   <button
@@ -769,27 +764,26 @@ export default function UsersPage() {
 
                 <div className="flex-1 overflow-y-auto px-6 py-5 space-y-7">
 
-                  {/* Identity section */}
+                  {/* Identity */}
                   <div>
                     <SectionLabel>identity</SectionLabel>
                     <div className="grid grid-cols-2 gap-4">
-                      <Field label="First Name" required>
-                        <TextInput value={form.firstName} onChange={(v) => setForm((p) => ({ ...p, firstName: v }))} placeholder="Zakariya" />
-                      </Field>
-                      <Field label="Last Name">
-                        <TextInput value={form.lastName} onChange={(v) => setForm((p) => ({ ...p, lastName: v }))} placeholder="Jabbar" />
+                      <Field label="Display Name">
+                        <TextInput
+                          value={form.displayName}
+                          onChange={(v) => setForm((p) => ({ ...p, displayName: v }))}
+                          placeholder="Zakariya Jabbar"
+                        />
                       </Field>
                       <Field label="Username" required>
-                        <TextInput value={form.username} onChange={(v) => setForm((p) => ({ ...p, username: v }))} placeholder="zeko" />
-                      </Field>
-                      <Field label="Display ID">
-                        <TextInput value={form.displayId} onChange={(v) => setForm((p) => ({ ...p, displayId: v }))} placeholder="root-1" />
+                        <TextInput
+                          value={form.username}
+                          onChange={(v) => setForm((p) => ({ ...p, username: v }))}
+                          placeholder="zeko"
+                        />
                       </Field>
                       <Field label="Email">
                         <TextInput value={form.email} onChange={() => {}} placeholder="—" disabled />
-                      </Field>
-                      <Field label="Department">
-                        <SelectField value={form.department} onChange={(v) => setForm((p) => ({ ...p, department: v }))} options={DEPARTMENTS} />
                       </Field>
                     </div>
                   </div>
@@ -845,7 +839,7 @@ export default function UsersPage() {
                     </div>
                   )}
 
-                  {/* Permissions */}
+                  {/* Access flags */}
                   {!isModerator && (
                     <div>
                       <SectionLabel>access flags</SectionLabel>
@@ -914,17 +908,19 @@ export default function UsersPage() {
                   <div>
                     <SectionLabel>identity</SectionLabel>
                     <div className="grid grid-cols-2 gap-4">
-                      <Field label="First Name" required>
-                        <TextInput value={form.firstName} onChange={(v) => setForm((p) => ({ ...p, firstName: v }))} placeholder="Zakariya" />
-                      </Field>
-                      <Field label="Last Name">
-                        <TextInput value={form.lastName} onChange={(v) => setForm((p) => ({ ...p, lastName: v }))} placeholder="Jabbar" />
+                      <Field label="Display Name">
+                        <TextInput
+                          value={form.displayName}
+                          onChange={(v) => setForm((p) => ({ ...p, displayName: v }))}
+                          placeholder="Zakariya Jabbar"
+                        />
                       </Field>
                       <Field label="Username" required>
-                        <TextInput value={form.username} onChange={(v) => setForm((p) => ({ ...p, username: v }))} placeholder="zeko" />
-                      </Field>
-                      <Field label="Display ID">
-                        <TextInput value={form.displayId} onChange={(v) => setForm((p) => ({ ...p, displayId: v }))} placeholder="root-1" />
+                        <TextInput
+                          value={form.username}
+                          onChange={(v) => setForm((p) => ({ ...p, username: v }))}
+                          placeholder="zeko"
+                        />
                       </Field>
                       <Field label="Email" required>
                         <div className="relative">
@@ -941,9 +937,6 @@ export default function UsersPage() {
                             )}
                           />
                         </div>
-                      </Field>
-                      <Field label="Department">
-                        <SelectField value={form.department} onChange={(v) => setForm((p) => ({ ...p, department: v }))} options={DEPARTMENTS} />
                       </Field>
                     </div>
                   </div>
@@ -1026,7 +1019,7 @@ export default function UsersPage() {
                   </button>
                   <button
                     onClick={handleSave}
-                    disabled={saving || !form.email || !form.firstName || !form.username || !form.password}
+                    disabled={saving || !form.email || !form.username || !form.password}
                     className="flex items-center gap-2 px-5 py-2 rounded-sm border font-mono text-xs tracking-wider border-zk-green/35 bg-zk-green/8 text-zk-green hover:bg-zk-green/18 hover:border-zk-green/60 disabled:opacity-40 disabled:pointer-events-none transition-all"
                   >
                     {saving

@@ -54,19 +54,16 @@ export async function POST(req: NextRequest) {
     if (flags.includes("Administrator")) role = "admin";
   }
 
-  // ── Derive display name from profile if not in metadata ─────
+  // ── Derive display name (username) ──────────────────────────
   let displayName = meta.name;
   if (!displayName) {
     const { data: profileRow } = await supabaseAdmin
       .from("profiles")
-      .select("first_name, last_name, username")
+      .select("username")
       .eq("id", user.id)
       .single();
-    if (profileRow) {
-      const p = profileRow as { first_name: string; last_name: string; username: string };
-      displayName = [p.first_name, p.last_name].filter(Boolean).join(" ") || p.username;
-    }
-    displayName = displayName ?? email.split("@")[0];
+    const p = profileRow as { username: string } | null;
+    displayName = p?.username ?? email.split("@")[0];
   }
 
   // ── Set session cookie ───────────────────────────────────────
