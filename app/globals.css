@@ -130,18 +130,45 @@
 
 /* ─── Scrollbar Styling ─────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--color-bg);
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 255, 65, 0.25);
-  border-radius: 3px;
+  background: rgba(0, 255, 65, 0.20);
+  border-radius: 99px;
+  transition: background 0.2s;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 255, 65, 0.50);
+  background: rgba(0, 255, 65, 0.55);
+  box-shadow: 0 0 6px rgba(0, 255, 65, 0.40);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ── Terminal output pane — extra-slim glowing rail ─────────── */
+.scrollbar-terminal {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,255,65,0.25) transparent;
+}
+.scrollbar-terminal::-webkit-scrollbar {
+  width: 3px;
+}
+.scrollbar-terminal::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 6px 0;
+}
+.scrollbar-terminal::-webkit-scrollbar-thumb {
+  background: rgba(0, 255, 65, 0.30);
+  border-radius: 99px;
+  box-shadow: 0 0 4px rgba(0, 255, 65, 0.25);
+}
+.scrollbar-terminal::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 255, 65, 0.65);
+  box-shadow: 0 0 8px rgba(0, 255, 65, 0.50);
 }
 
 /* ─── Selection ─────────────────────────────────────────────── */

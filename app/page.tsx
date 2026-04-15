@@ -5,13 +5,14 @@
 "use client";
 
 import { useState, useLayoutEffect } from "react";
-import { BootSequence } from "@/components/ui/BootSequence";
-import { Navbar }       from "@/components/sections/Navbar";
-import { Hero }         from "@/components/sections/Hero";
-import { Features }     from "@/components/sections/Features";
-import { CodeShowcase } from "@/components/sections/CodeShowcase";
-import { Contact }      from "@/components/sections/Contact";
-import { Footer }       from "@/components/sections/Footer";
+import { BootSequence }       from "@/components/ui/BootSequence";
+import { Navbar }             from "@/components/sections/Navbar";
+import { Hero }               from "@/components/sections/Hero";
+import { TerminalPlayground } from "@/components/sections/TerminalPlayground";
+import { Features }           from "@/components/sections/Features";
+import { CodeShowcase }       from "@/components/sections/CodeShowcase";
+import { Contact }            from "@/components/sections/Contact";
+import { Footer }             from "@/components/sections/Footer";
 
 export default function HomePage() {
   const [isBooting, setIsBooting] = useState(false);
@@ -49,7 +50,10 @@ export default function HomePage() {
         {/* 1. Hero — headline, stats, CTAs */}
         <Hero />
 
-        {/* 2. Features — System Modules grid */}
+        {/* 2. Interactive terminal playground */}
+        <TerminalPlayground />
+
+        {/* 3. Features — System Modules grid */}
         <Features />
 
         {/* 3. Code Showcase — terminal window + value props */}
