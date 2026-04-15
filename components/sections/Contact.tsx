@@ -4,10 +4,18 @@
 
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { Send, Terminal, CheckCircle2, AlertCircle } from "lucide-react";
+import { useState, useRef, type FormEvent } from "react";
+import { Send, Terminal, CheckCircle2, AlertCircle, Zap } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
+
+// ─── Transmit Log Lines ──────────────────────────────────────
+const TRANSMIT_LOGS = [
+  { prefix: "SYS", text: "Securing communication channel..." },
+  { prefix: "ENC", text: "Encrypting payload with AES-256..." },
+  { prefix: "NET", text: "Establishing route to zeko@os..." },
+  { prefix: "PKT", text: "Dispatching encrypted signal..." },
+] as const;
 
 // ─── Form Fields Config ──────────────────────────────────────
 const FORM_FIELDS = [
@@ -54,6 +62,7 @@ export function Contact() {
   const [errors, setErrors] = useState<Partial<Record<FieldId, string>>>({});
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [focused, setFocused] = useState<string | null>(null);
+  const refCode = useRef(Math.random().toString(36).slice(2, 8).toUpperCase());
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -158,20 +167,100 @@ export function Contact() {
 
             {status === "success" ? (
               /* ── Success State ──────────────────────────── */
-              <div className="py-12 flex flex-col items-center justify-center gap-4 text-center">
-                <CheckCircle2 size={40} className="text-zk-green" />
-                <div>
-                  <p className="font-mono text-lg text-zk-green font-bold mb-1">
-                    TRANSMISSION COMPLETE
-                  </p>
-                  <p className="font-mono text-sm text-zk-muted">
-                    Message queued. Expect a response within 24–48 hours.
-                  </p>
+              <div className="relative py-10 flex flex-col items-center justify-center gap-5 text-center overflow-hidden">
+                {/* One-shot scanline sweep */}
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-0 right-0 h-px bg-gradient-to-r from-transparent via-zk-green to-transparent"
+                  style={{ animation: "zk-scanline 1.2s ease-out 0.1s both" }}
+                />
+
+                {/* Icon */}
+                <div
+                  className="rounded-full p-3 border border-zk-green/30 bg-zk-green/8"
+                  style={{ animation: "zk-icon-pop 0.7s cubic-bezier(0.34,1.56,0.64,1) 0.2s both, zk-glow-ring 2s ease-in-out 0.9s infinite" }}
+                >
+                  <CheckCircle2 size={36} className="text-zk-green" />
                 </div>
-                <div className="font-mono text-xs text-zk-muted/60 border border-zk-border rounded-sm px-4 py-2">
-                  REF: ZK-{Math.random().toString(36).slice(2, 8).toUpperCase()}
+
+                {/* Title */}
+                <p
+                  className="font-mono text-lg text-zk-green font-bold tracking-[0.12em]"
+                  style={{ animation: "zk-title-reveal 0.6s ease-out 0.7s both" }}
+                >
+                  TRANSMISSION COMPLETE
+                </p>
+
+                {/* Sub text */}
+                <p
+                  className="font-mono text-sm text-zk-muted max-w-xs"
+                  style={{ animation: "zk-fade-up 0.5s ease-out 1.1s both" }}
+                >
+                  Message queued. Expect a response within 24–48 hours.
+                </p>
+
+                {/* REF badge */}
+                <div
+                  className="font-mono text-xs text-zk-green border border-zk-green/25 bg-zk-green/5 rounded-sm px-5 py-2 flex items-center gap-2"
+                  style={{ animation: "zk-ref-reveal 0.8s ease-out 1.5s both" }}
+                >
+                  <Zap size={10} className="text-zk-green/60" />
+                  REF: ZK-{refCode.current}
+                </div>
+
+                {/* Footer hint */}
+                <p
+                  className="font-mono text-[10px] text-zk-muted/40"
+                  style={{ animation: "zk-fade-up 0.4s ease-out 2s both" }}
+                >
+                  {">"} Signal acknowledged · Channel closed
+                </p>
+              </div>
+
+            ) : status === "loading" ? (
+              /* ── Loading / Transmit State ───────────────── */
+              <div className="py-8">
+                {/* Header */}
+                <div className="flex items-center gap-3 mb-6">
+                  <span className="font-mono text-sm text-zk-green font-bold tracking-widest">
+                    TRANSMITTING
+                  </span>
+                  <span className="terminal-cursor" />
+                </div>
+
+                {/* Log lines */}
+                <div className="space-y-2.5 mb-7">
+                  {TRANSMIT_LOGS.map((log, i) => (
+                    <div
+                      key={log.prefix}
+                      className="flex items-center gap-3 font-mono text-xs opacity-0"
+                      style={{ animation: `zk-log-appear 0.35s ease-out ${i * 380}ms forwards` }}
+                    >
+                      <span className="text-zk-green/50 shrink-0 w-10">[{log.prefix}]</span>
+                      <span className="text-zk-muted">{log.text}</span>
+                      {i === TRANSMIT_LOGS.length - 1 && (
+                        <span className="terminal-cursor" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Progress bar */}
+                <div className="font-mono text-[10px] text-zk-muted/60 mb-1.5 tracking-widest">
+                  SIGNAL STRENGTH
+                </div>
+                <div className="relative h-1 bg-zk-border rounded-full overflow-hidden">
+                  <div
+                    aria-hidden="true"
+                    className="absolute inset-y-0 w-2/5 rounded-full bg-zk-green"
+                    style={{ animation: "zk-progress-shimmer 1.3s ease-in-out infinite" }}
+                  />
+                </div>
+                <div className="mt-2.5 font-mono text-[10px] text-zk-muted/40">
+                  Routing via secure relay · Encrypted end-to-end
                 </div>
               </div>
+
             ) : (
               /* ── Form ──────────────────────────────────── */
               <form onSubmit={handleSubmit} className="space-y-5" noValidate>
@@ -298,10 +387,9 @@ export function Contact() {
                     type="submit"
                     variant="primary"
                     size="md"
-                    isLoading={status === "loading"}
                     rightIcon={<Send size={13} />}
                   >
-                    {status === "loading" ? "Transmitting..." : "Send Signal"}
+                    Send Signal
                   </Button>
                 </div>
               </form>
@@ -312,9 +400,9 @@ export function Contact() {
         {/* ── Direct links ────────────────────────────────── */}
         <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
           {[
-            { label: "Email",   value: "hello@zeko.os",   href: "mailto:hello@zeko.os" },
-            { label: "GitHub",  value: "github.com/zeko", href: "https://github.com"   },
-            { label: "Twitter", value: "@zeko_os",        href: "https://x.com"        },
+            { label: "Email",   value: "zakariya.r.jabbar@gmail.com",   href: "mailto:zakariya.r.jabbar@gmail.com" },
+            { label: "GitHub",  value: "itsrealzeko", href: "https://github.com/itsrealzeko"   },
+            { label: "Instagram", value: "@zakariyarjabbar",        href: "https://www.instagram.com/zakariyarjabbar" },
           ].map((item) => (
             <a
               key={item.label}
