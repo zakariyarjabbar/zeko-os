@@ -8,6 +8,8 @@ import { NextResponse } from "next/server";
 import { getSession }        from "@/lib/auth";
 import { supabaseAdmin }     from "@/lib/supabase/server";
 import { getEffectiveFlags } from "@/lib/effective-flags";
+import { asUserId } from "@/lib/types/ids";
+import { asPermission, channelPerm } from "@/lib/types/permission";
 
 const ONLINE_THRESHOLD_MS = 60 * 1000;
 
@@ -15,7 +17,7 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const userFlags = await getEffectiveFlags(session.id);
+  const userFlags = await getEffectiveFlags(asUserId(session.id));
   const isAdmin   = userFlags.includes("Administrator");
 
   // Run all three queries in parallel
@@ -59,11 +61,12 @@ export async function GET() {
     // Permissions this requesting user holds for this channel
     const userChPerms = isAdmin
       ? chPerms
-      : chPerms.filter((p) => userFlags.includes(p));
+      : chPerms.filter((p) => userFlags.includes(asPermission(p)));
 
     // Count distinct online users who can view this channel
+    const viewPerm = channelPerm("view", c.id);
     const onlineCount = onlineProfiles.filter((p) =>
-      p.access_flags.includes("Administrator") || p.access_flags.includes(viewFlag)
+      p.access_flags.includes("Administrator") || p.access_flags.includes(viewPerm)
     ).length;
 
     return {

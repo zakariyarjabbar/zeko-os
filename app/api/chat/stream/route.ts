@@ -35,6 +35,8 @@ export const dynamic = "force-dynamic";
 import { NextRequest }        from "next/server";
 import { getSession }         from "@/lib/auth";
 import { getEffectiveFlags }  from "@/lib/effective-flags";
+import { asUserId }           from "@/lib/types/ids";
+import { channelPerm }        from "@/lib/types/permission";
 import { supabaseAdmin }      from "@/lib/supabase/server";
 import { StreamParamsSchema } from "@/lib/validations/chat";
 
@@ -55,6 +57,7 @@ export async function GET(req: NextRequest) {
   // ── Auth ───────────────────────────────────────────────────
   const session = await getSession();
   if (!session) return new Response("Unauthorized", { status: 401 });
+  const sessionId = session.id; // extract before async closures (strict null safety)
 
   // ── Param validation ───────────────────────────────────────
   const rawParams = Object.fromEntries(req.nextUrl.searchParams.entries());
@@ -70,9 +73,9 @@ export async function GET(req: NextRequest) {
 
   // ── Permission check (done once, before stream opens) ─────
   if (params.type === "channel") {
-    const flags   = await getEffectiveFlags(session.id);
+    const flags   = await getEffectiveFlags(asUserId(sessionId));
     const isAdmin = flags.includes("Administrator");
-    if (!isAdmin && !flags.includes(`view:${params.id}`)) {
+    if (!isAdmin && !flags.includes(channelPerm("view", params.id))) {
       return new Response("Forbidden", { status: 403 });
     }
   }
@@ -197,8 +200,8 @@ export async function GET(req: NextRequest) {
               .from("direct_messages")
               .select("id, from_user_id, to_user_id, from_handle, to_handle, body, read, created_at")
               .or(
-                `and(from_user_id.eq.${session.id},to_user_id.eq.${params.with}),` +
-                `and(from_user_id.eq.${params.with},to_user_id.eq.${session.id})`,
+                `and(from_user_id.eq.${sessionId},to_user_id.eq.${params.with}),` +
+                `and(from_user_id.eq.${params.with},to_user_id.eq.${sessionId})`,
               )
               .gt("created_at", lastTs)
               .order("created_at", { ascending: true })

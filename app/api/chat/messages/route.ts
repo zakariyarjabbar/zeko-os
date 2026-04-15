@@ -12,9 +12,11 @@ import { NextRequest, NextResponse }        from "next/server";
 import { getSession }                        from "@/lib/auth";
 import { supabaseAdmin }                     from "@/lib/supabase/server";
 import { getEffectiveFlags }                 from "@/lib/effective-flags";
+import { asUserId }                          from "@/lib/types/ids";
+import { type Permission }                   from "@/lib/types/permission";
 import { SendChannelMessageSchema }          from "@/lib/validations/chat";
 
-function isAdmin(flags: string[]): boolean {
+function isAdmin(flags: readonly Permission[]): boolean {
   return flags.includes("Administrator");
 }
 
@@ -26,7 +28,7 @@ export async function GET(req: NextRequest) {
   const channelId = req.nextUrl.searchParams.get("channel");
   if (!channelId) return NextResponse.json({ error: "channel param required" }, { status: 400 });
 
-  const flags = await getEffectiveFlags(session.id);
+  const flags = await getEffectiveFlags(asUserId(session.id));
 
   if (!isAdmin(flags) && !flags.includes(`view:${channelId}`)) {
     return NextResponse.json({ error: "You do not have permission to view this channel." }, { status: 403 });
@@ -56,14 +58,14 @@ export async function POST(req: NextRequest) {
   const parsed = SendChannelMessageSchema.safeParse(raw);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.errors[0]?.message ?? "Invalid payload." },
+      { error: parsed.error.issues[0]?.message ?? "Invalid payload." },
       { status: 400 }
     );
   }
   const { channelId, text } = parsed.data;
 
   // Must be able to view the channel to send in it
-  const flags = await getEffectiveFlags(session.id);
+  const flags = await getEffectiveFlags(asUserId(session.id));
   if (!isAdmin(flags) && !flags.includes(`view:${channelId}`)) {
     return NextResponse.json({ error: "You do not have permission to send messages in this channel." }, { status: 403 });
   }
@@ -101,7 +103,7 @@ export async function DELETE(req: NextRequest) {
   if (!msg) return NextResponse.json({ error: "Message not found." }, { status: 404 });
 
   const m = msg as { id: string; channel_id: string; user_id: string };
-  const flags = await getEffectiveFlags(session.id);
+  const flags = await getEffectiveFlags(asUserId(session.id));
   const isOwn = m.user_id === session.id;
   const canDelete = isOwn || isAdmin(flags) || flags.includes(`delete-msg:${m.channel_id}`);
 

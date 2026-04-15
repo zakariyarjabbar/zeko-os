@@ -30,6 +30,7 @@ import { useEffect }                   from "react";
 import { getChatCache }                from "@/lib/chat-cache";
 import { getAppCache }                 from "@/lib/app-cache";
 import { canViewInbox, isFounder }     from "@/lib/permissions";
+import { type Permission }             from "@/lib/types/permission";
 import type { Channel, DMConversation }        from "@/components/system/chat/types";
 import type { CachedInboxItem, CachedRole }    from "@/lib/app-cache";
 
@@ -82,7 +83,7 @@ async function prefetchRoles(): Promise<void> {
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface ShellPrefetcherProps {
-  accessFlags: string[];
+  accessFlags: Permission[];
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────

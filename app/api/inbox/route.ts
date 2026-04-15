@@ -6,13 +6,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { getEffectiveFlags } from "@/lib/effective-flags";
+import { asUserId } from "@/lib/types/ids";
 import { canViewInbox, canManageInbox } from "@/lib/permissions";
 
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const flags = await getEffectiveFlags(session.id);
+  const flags = await getEffectiveFlags(asUserId(session.id));
   if (!canViewInbox(flags)) {
     return NextResponse.json({ error: "Forbidden. view-inbox or inbox-manager permission required." }, { status: 403 });
   }
@@ -31,7 +32,7 @@ export async function DELETE(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const flags = await getEffectiveFlags(session.id);
+  const flags = await getEffectiveFlags(asUserId(session.id));
   if (!canManageInbox(flags)) {
     return NextResponse.json({ error: "Forbidden. inbox-manager permission required." }, { status: 403 });
   }

@@ -16,11 +16,12 @@ import { PresenceTracker }   from "@/components/system/PresenceTracker";
 import { DisplayNameGate }   from "@/components/system/DisplayNameGate";
 import { ShellPrefetcher }   from "@/components/system/ShellPrefetcher";
 import type { UserProfile }  from "@/lib/profile";
+import { asUserId }          from "@/lib/types/ids";
 
 // Fallback profile when DB is unreachable
 function fallbackProfile(session: { id: string; email: string; name: string; role: string }): UserProfile {
   return {
-    id:            session.id,
+    id:            asUserId(session.id),
     displayId:     0,
     displayName:   "",
     email:         session.email,

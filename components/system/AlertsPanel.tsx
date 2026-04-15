@@ -96,7 +96,7 @@ export function AlertsPanel({ open, alerts, onClose, onClear }: AlertsPanelProps
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-zk-border">
             <div className="flex items-center gap-2">
               <span className="font-mono text-[11px] font-semibold text-zk-green tracking-[0.15em] uppercase">
-                SYSTEM_ALERTS
+                DM_ALERTS
               </span>
               {alerts.length > 0 && (
                 <span className="font-mono text-[9px] text-zk-bg bg-zk-green rounded-sm px-1.5 py-0.5 leading-none">

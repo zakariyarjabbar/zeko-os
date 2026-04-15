@@ -7,6 +7,7 @@ import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { getEffectiveFlags } from "@/lib/effective-flags";
 import { setSession } from "@/lib/auth";
+import { asUserId } from "@/lib/types/ids";
 
 // Use anon key for sign-in — never the service role
 function getAnonClient() {
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest) {
   // ── Derive role from profile if not stored in user metadata ──
   let role = meta.role ?? "user";
   if (!meta.role) {
-    const flags = await getEffectiveFlags(user.id);
+    const flags = await getEffectiveFlags(asUserId(user.id));
     if (flags.includes("Administrator")) role = "admin";
   }
 

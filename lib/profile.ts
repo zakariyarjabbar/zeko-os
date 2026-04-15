@@ -5,16 +5,18 @@ import { type SessionPayload } from "./auth";
 import { supabaseAdmin } from "./supabase/server";
 import { getEffectiveFlags } from "./effective-flags";
 import { type SessionStatus } from "./types/user";
+import { type UserId, asUserId } from "./types/ids";
+import { type Permission } from "./types/permission";
 
 // ─── Interface ────────────────────────────────────────────────
 export interface UserProfile {
-  id:            string;
-  displayId:     number;   // sequential integer — e.g. 1, 2, 3
-  displayName:   string;   // human-readable name — letters, numbers, one space max
+  id:            UserId;       // branded UUID — compile-time type safety for ID comparisons
+  displayId:     number;       // sequential integer — e.g. 1, 2, 3
+  displayName:   string;       // human-readable name — letters, numbers, one space max
   email:         string;
   username:      string;
   role:          string;
-  accessFlags:   string[];
+  accessFlags:   Permission[]; // typed union — typos caught at compile time
   sessionStatus: SessionStatus;
   lastLoginIp:   string;
   lastActive:    string;
@@ -53,11 +55,11 @@ export async function buildProfile(session: SessionPayload): Promise<UserProfile
 
   const row = (data as ProfileRow | null) ?? DEFAULT;
 
-  // Effective flags = own flags ∪ role permissions
-  const effectiveFlags = await getEffectiveFlags(session.id);
+  // Effective flags = own flags ∪ role permissions (typed at DB boundary)
+  const effectiveFlags = await getEffectiveFlags(asUserId(session.id));
 
   return {
-    id:            session.id,
+    id:            asUserId(session.id), // cast at boundary — UserId inside the app
     displayId:     row.display_id,
     displayName:   row.display_name ?? "",
     email:         session.email,

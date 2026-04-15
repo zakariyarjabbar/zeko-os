@@ -6,12 +6,13 @@ import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { getEffectiveFlags } from "@/lib/effective-flags";
 import { canViewInbox } from "@/lib/permissions";
+import { asUserId } from "@/lib/types/ids";
 
 export async function PATCH(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const flags = await getEffectiveFlags(session.id);
+  const flags = await getEffectiveFlags(asUserId(session.id));
   if (!canViewInbox(flags)) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
 
   const id = req.nextUrl.searchParams.get("id");

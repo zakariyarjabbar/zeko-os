@@ -13,6 +13,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { type UserProfile } from "@/lib/profile";
 import { type SessionPayload } from "@/lib/auth";
+import { getChatCache } from "@/lib/chat-cache";
 
 export type AlertSeverity = "critical" | "warn" | "info";
 export interface SystemAlert {
@@ -22,16 +23,13 @@ export interface SystemAlert {
   message:   string;
 }
 
-const INITIAL_ALERTS: SystemAlert[] = [
-  { id: "a1", severity: "critical", timestamp: "08:42:11", message: "Unauthorized SSH attempt blocked at edge node." },
-  { id: "a2", severity: "critical", timestamp: "08:39:05", message: "Brute-force detected on /api/auth/login — IP blacklisted." },
-  { id: "a3", severity: "warn",     timestamp: "08:35:44", message: "Memory usage spike on Node-3 (87% utilization)." },
-  { id: "a4", severity: "warn",     timestamp: "08:21:30", message: "TLS certificate expires in 14 days — renewal required." },
-  { id: "a5", severity: "warn",     timestamp: "08:17:02", message: "Anomalous traffic pattern on /api/* — scanner activity suspected." },
-  { id: "a6", severity: "info",     timestamp: "07:56:51", message: "Pipeline #deploy-088 completed. 3 nodes updated." },
-  { id: "a7", severity: "info",     timestamp: "07:00:00", message: "Nightly database backup completed. 2.4 GB archived." },
-  { id: "a8", severity: "info",     timestamp: "06:45:18", message: "Key rotation scheduled for 02:00 UTC. Vault references updated." },
-];
+function formatAlertTime(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (!isNaN(d.getTime())) return d.toTimeString().slice(0, 8);
+  } catch { /* ignore */ }
+  return "";
+}
 
 // Route → breadcrumb label
 const ROUTE_LABELS: Record<string, string> = {
@@ -98,12 +96,31 @@ export function SystemHeader({ session, profile }: SystemHeaderProps) {
   const pathname  = usePathname();
   const [loggingOut,        setLoggingOut]        = useState(false);
   const [alertsOpen,        setAlertsOpen]        = useState(false);
-  const [alerts,            setAlerts]            = useState<SystemAlert[]>(INITIAL_ALERTS);
+  const [alerts,            setAlerts]            = useState<SystemAlert[]>([]);
   const [profileOpen,       setProfileOpen]       = useState(false);
   const [logoutTransition,  setLogoutTransition]  = useState(false);
 
-  const criticalCount = alerts.filter((a) => a.severity === "critical").length;
-  const routeLabel    = ROUTE_LABELS[pathname] ?? "System";
+  // Build alerts from unread DM conversations
+  useEffect(() => {
+    function buildAlerts() {
+      const convos = getChatCache().getDmConvos() ?? [];
+      const dmAlerts: SystemAlert[] = convos
+        .filter((c) => c.unread > 0)
+        .map((c) => ({
+          id:        c.userId,
+          severity:  "info" as AlertSeverity,
+          timestamp: formatAlertTime(c.lastTime),
+          message:   `New DM from @${c.handle}${c.unread > 1 ? ` (${c.unread} unread)` : ""}: ${c.lastMsg}`,
+        }));
+      setAlerts(dmAlerts);
+    }
+
+    buildAlerts();
+    window.addEventListener("zk:cache:dm", buildAlerts);
+    return () => window.removeEventListener("zk:cache:dm", buildAlerts);
+  }, []);
+
+  const routeLabel = ROUTE_LABELS[pathname] ?? "System";
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -161,7 +178,7 @@ export function SystemHeader({ session, profile }: SystemHeaderProps) {
             <IconBtn
               icon={<Bell size={14} />}
               label="Alerts"
-              badge={criticalCount > 0}
+              badge={alerts.length > 0}
               active={alertsOpen}
               onClick={() => setAlertsOpen((v) => !v)}
             />

@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getEffectiveFlags } from "@/lib/effective-flags";
+import { asUserId } from "@/lib/types/ids";
 import {
   canEditUsers, canDeleteUsers, isFounder,
   MODERATOR_EDITABLE_FIELDS,
@@ -20,7 +21,7 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 
 // Check if the target user holds the Administrator permission (via own flags OR roles)
 async function targetIsAdministrator(targetId: string): Promise<boolean> {
-  const flags = await getEffectiveFlags(targetId);
+  const flags = await getEffectiveFlags(asUserId(targetId));
   return isFounder(flags);
 }
 
@@ -31,7 +32,7 @@ export async function PATCH(
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const actorFlags = await getEffectiveFlags(session.id);
+  const actorFlags = await getEffectiveFlags(asUserId(session.id));
 
   if (!canEditUsers(actorFlags)) {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });
@@ -127,7 +128,7 @@ export async function DELETE(
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const actorFlags = await getEffectiveFlags(session.id);
+  const actorFlags = await getEffectiveFlags(asUserId(session.id));
 
   if (!canDeleteUsers(actorFlags)) {
     return NextResponse.json({ error: "Forbidden. admin or Administrator permission required." }, { status: 403 });

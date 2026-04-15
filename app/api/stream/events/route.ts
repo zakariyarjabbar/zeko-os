@@ -27,6 +27,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest }       from "next/server";
 import { getSession }        from "@/lib/auth";
 import { getEffectiveFlags } from "@/lib/effective-flags";
+import { asUserId }          from "@/lib/types/ids";
 import { supabaseAdmin }     from "@/lib/supabase/server";
 import { canViewInbox }      from "@/lib/permissions";
 
@@ -65,9 +66,10 @@ export async function GET(req: NextRequest) {
   // ── Auth ───────────────────────────────────────────────────
   const session = await getSession();
   if (!session) return new Response("Unauthorized", { status: 401 });
+  const sessionId = session.id; // extract before async closures (strict null safety)
 
   // ── Permission snapshot (taken once at connection time) ────
-  const flags      = await getEffectiveFlags(session.id);
+  const flags      = await getEffectiveFlags(asUserId(sessionId));
   const watchInbox = canViewInbox(flags);
 
   // ── Presence watch list ────────────────────────────────────
@@ -110,7 +112,7 @@ export async function GET(req: NextRequest) {
           const { data: dmRows } = await supabaseAdmin
             .from("direct_messages")
             .select("id, created_at")
-            .eq("to_user_id", session.id)
+            .eq("to_user_id", sessionId)
             .eq("read", false)
             .gt("created_at", dmSince)
             .order("created_at", { ascending: false })

@@ -12,14 +12,15 @@ import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { useProfile } from "@/components/system/SessionContext";
 import { isFounder, canViewInbox, canViewUsers } from "@/lib/permissions";
+import { type Permission, asPermission } from "@/lib/types/permission";
 import { getAppCache } from "@/lib/app-cache";
 
 // ─── Permission check for nav items ──────────────────────────
-function checkFlag(requireFlag: string, flags: string[]): boolean {
+function checkFlag(requireFlag: string, flags: readonly Permission[]): boolean {
   if (requireFlag === "view-inbox")    return canViewInbox(flags);
   if (requireFlag === "moderator")     return canViewUsers(flags);
   if (requireFlag === "Administrator") return isFounder(flags);
-  return flags.includes(requireFlag);
+  return flags.includes(asPermission(requireFlag));
 }
 
 // ─── Nav config ───────────────────────────────────────────────

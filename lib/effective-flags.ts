@@ -7,12 +7,23 @@
 // reading access_flags directly.
 
 import { supabaseAdmin } from "./supabase/server";
+import type { UserId }                from "./types/ids";
+import { type Permission, asPermission } from "./types/permission";
 
 interface ProfileRow  { access_flags: string[] }
 interface UserRoleRow { role_id: string }
 interface RoleRow     { permissions: string[] }
 
-export async function getEffectiveFlags(userId: string): Promise<string[]> {
+/**
+ * Compute the full effective permission set for `userId`.
+ * Reads the user's own `access_flags` plus every permission granted by their
+ * assigned roles, deduplicates the union, and casts to `Permission[]` at the
+ * DB boundary so downstream code is fully typed.
+ *
+ * @param userId  Branded UserId — prevents accidentally passing a ChannelId etc.
+ * @returns       Deduplicated, typed permission array.
+ */
+export async function getEffectiveFlags(userId: UserId): Promise<Permission[]> {
   // 1. Own flags
   const { data: profile } = await supabaseAdmin
     .from("profiles")
@@ -30,7 +41,9 @@ export async function getEffectiveFlags(userId: string): Promise<string[]> {
 
   const roleIds = (userRoles ?? []).map((ur: UserRoleRow) => ur.role_id);
 
-  if (roleIds.length === 0) return [...new Set(ownFlags)];
+  if (roleIds.length === 0) {
+    return [...new Set(ownFlags)].map(asPermission);
+  }
 
   // 3. Permissions from each role
   const { data: roles } = await supabaseAdmin
@@ -40,6 +53,6 @@ export async function getEffectiveFlags(userId: string): Promise<string[]> {
 
   const roleFlags = (roles ?? []).flatMap((r: RoleRow) => r.permissions ?? []);
 
-  // 4. Union — deduplicated
-  return [...new Set([...ownFlags, ...roleFlags])];
+  // 4. Union — deduplicated, cast at DB boundary
+  return [...new Set([...ownFlags, ...roleFlags])].map(asPermission);
 }
