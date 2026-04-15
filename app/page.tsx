@@ -6,9 +6,13 @@
 
 import { useState, useLayoutEffect } from "react";
 import { BootSequence }       from "@/components/ui/BootSequence";
+import { CursorTrail }        from "@/components/ui/CursorTrail";
+import { KonamiCode }         from "@/components/ui/KonamiCode";
+import { SystemHint }         from "@/components/ui/SystemHint";
 import { Navbar }             from "@/components/sections/Navbar";
 import { Hero }               from "@/components/sections/Hero";
 import { TerminalPlayground } from "@/components/sections/TerminalPlayground";
+import { LiveMonitor }        from "@/components/sections/LiveMonitor";
 import { Features }           from "@/components/sections/Features";
 import { CodeShowcase }       from "@/components/sections/CodeShowcase";
 import { Contact }            from "@/components/sections/Contact";
@@ -39,6 +43,11 @@ export default function HomePage() {
         <div className="fixed inset-0 z-[9999] bg-black" aria-hidden="true" />
       )}
 
+      {/* Global interactive overlays */}
+      <CursorTrail />
+      <KonamiCode />
+      <SystemHint />
+
       {/* Boot overlay */}
       {isBooting && <BootSequence onComplete={handleBootComplete} />}
 
@@ -50,16 +59,19 @@ export default function HomePage() {
         {/* 1. Hero — headline, stats, CTAs */}
         <Hero />
 
-        {/* 2. Interactive terminal playground */}
+        {/* 2. Interactive terminal shell */}
         <TerminalPlayground />
 
-        {/* 3. Features — System Modules grid */}
+        {/* 3. Live system monitor — real-time metrics + process table */}
+        <LiveMonitor />
+
+        {/* 4. Features — System Modules grid */}
         <Features />
 
-        {/* 3. Code Showcase — terminal window + value props */}
+        {/* 5. Code Showcase — terminal window + value props */}
         <CodeShowcase />
 
-        {/* 4. Contact — CLI-style form */}
+        {/* 6. Contact — CLI-style form */}
         <Contact />
       </main>
 
