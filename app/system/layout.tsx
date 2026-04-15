@@ -14,6 +14,7 @@ import { SystemHeader }      from "@/components/system/SystemHeader";
 import { SessionProvider }   from "@/components/system/SessionContext";
 import { PresenceTracker }   from "@/components/system/PresenceTracker";
 import { DisplayNameGate }   from "@/components/system/DisplayNameGate";
+import { ShellPrefetcher }   from "@/components/system/ShellPrefetcher";
 import type { UserProfile }  from "@/lib/profile";
 
 // Fallback profile when DB is unreachable
@@ -55,6 +56,8 @@ export default async function SystemLayout({
   return (
     <SessionProvider session={session} profile={profile}>
       <PresenceTracker />
+      {/* Pre-warm all caches the user has permission to access */}
+      <ShellPrefetcher accessFlags={profile.accessFlags} />
       {/* Blocking gate — renders only when display_name is empty */}
       <DisplayNameGate initialDisplayName={profile.displayName} />
       <div className="fixed inset-0 flex flex-col bg-zk-bg overflow-hidden">

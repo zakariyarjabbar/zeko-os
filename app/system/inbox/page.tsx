@@ -13,17 +13,11 @@ import {
 import { cn } from "@/lib/utils";
 import { useProfile } from "@/components/system/SessionContext";
 import { canManageInbox } from "@/lib/permissions";
+import { getAppCache } from "@/lib/app-cache";
+import type { CachedInboxItem } from "@/lib/app-cache";
 
 // ─── Types ────────────────────────────────────────────────────
-interface ContactMessage {
-  id:         string;
-  name:       string;
-  email:      string;
-  subject:    string;
-  message:    string;
-  read:       boolean;
-  created_at: string;
-}
+type ContactMessage = CachedInboxItem;
 
 // ─── Helpers ──────────────────────────────────────────────────
 function formatDate(iso: string) {
@@ -85,29 +79,51 @@ export default function InboxPage() {
   const profile   = useProfile();
   const canManage = canManageInbox(profile.accessFlags);
 
-  const [messages,  setMessages]  = useState<ContactMessage[]>([]);
+  // ── Initialise from cache (instant), then refresh if stale ──
+  const cache = getAppCache();
+  const cached = cache.getInbox();
+
+  const [messages,  setMessages]  = useState<ContactMessage[]>(cached ?? []);
   const [selected,  setSelected]  = useState<ContactMessage | null>(null);
-  const [loading,   setLoading]   = useState(true);
+  // Skip the loading skeleton when we already have cached data
+  const [loading,   setLoading]   = useState(cached === null);
   const [deleting,  setDeleting]  = useState(false);
   const [replyText, setReplyText] = useState("");
   const [sending,   setSending]   = useState(false);
   const [replyStatus, setReplyStatus] = useState<"idle" | "ok" | "err" | "no-key">("idle");
 
-  // ── Fetch ───────────────────────────────────────────────────
-  const fetchMessages = useCallback(async () => {
-    setLoading(true);
+  // ── Fetch — stale-while-revalidate ─────────────────────────
+  const fetchMessages = useCallback(async (showSpinner = false) => {
+    if (showSpinner) setLoading(true);
     try {
       const res  = await fetch("/api/inbox");
       const data = await res.json() as ContactMessage[];
-      if (Array.isArray(data)) setMessages(data);
+      if (Array.isArray(data)) {
+        cache.setInbox(data);
+        setMessages(data);
+      }
     } catch (e) {
       console.error("[inbox] fetch:", e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [cache]);
 
-  useEffect(() => { fetchMessages(); }, [fetchMessages]);
+  useEffect(() => {
+    // If we had cached data it was already shown — only fetch if stale
+    if (!cache.isInboxFresh()) {
+      fetchMessages(!cached);  // show spinner only on cold cache miss
+    }
+
+    // Re-sync whenever ShellPrefetcher updates the cache via SSE
+    function onCacheUpdate() {
+      const fresh = getAppCache().getInbox();
+      if (fresh) setMessages(fresh);
+    }
+    window.addEventListener("zk:cache:inbox", onCacheUpdate);
+    return () => window.removeEventListener("zk:cache:inbox", onCacheUpdate);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Select + mark read ──────────────────────────────────────
   async function handleSelect(msg: ContactMessage) {
@@ -117,9 +133,13 @@ export default function InboxPage() {
 
     if (!msg.read) {
       await fetch(`/api/inbox/read?id=${msg.id}`, { method: "PATCH" });
+      // Update both local state and the cache
+      getAppCache().patchInboxItem(msg.id, { read: true });
       setMessages((prev) =>
         prev.map((m) => m.id === msg.id ? { ...m, read: true } : m)
       );
+      // Notify sidebar to refresh its unread count
+      window.dispatchEvent(new CustomEvent("zk:cache:inbox"));
     }
   }
 
@@ -127,9 +147,13 @@ export default function InboxPage() {
   async function handleDelete(id: string) {
     setDeleting(true);
     await fetch(`/api/inbox?id=${id}`, { method: "DELETE" });
+    // Update both local state and the cache
+    getAppCache().removeInboxItem(id);
     setMessages((prev) => prev.filter((m) => m.id !== id));
     if (selected?.id === id) setSelected(null);
     setDeleting(false);
+    // Notify sidebar
+    window.dispatchEvent(new CustomEvent("zk:cache:inbox"));
   }
 
   // ── Reply ───────────────────────────────────────────────────
@@ -169,7 +193,7 @@ export default function InboxPage() {
         <Inbox size={32} className="text-zk-muted/30" />
         <p className="font-mono text-xs text-zk-muted/50 tracking-widest">NO MESSAGES</p>
         <button
-          onClick={fetchMessages}
+          onClick={() => fetchMessages(true)}
           className="flex items-center gap-1.5 font-mono text-[10px] text-zk-muted/50 hover:text-zk-green transition-colors"
         >
           <RefreshCw size={11} /> Refresh
@@ -198,7 +222,7 @@ export default function InboxPage() {
             )}
           </div>
           <button
-            onClick={fetchMessages}
+            onClick={() => fetchMessages(true)}
             className="text-zk-muted/50 hover:text-zk-green transition-colors"
             aria-label="Refresh"
           >

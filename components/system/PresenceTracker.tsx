@@ -14,10 +14,10 @@ export function PresenceTracker() {
     // ── Mark online immediately ──────────────────────────────
     beat();
 
-    // ── Heartbeat every 20 s ─────────────────────────────────
-    // Keeps last_active fresh so the 60-second stale check never
+    // ── Heartbeat every 10 s ─────────────────────────────────
+    // Keeps last_active fresh so the 25-second stale check never
     // incorrectly shows an active user as offline.
-    const heartbeatId = setInterval(beat, 20_000);
+    const heartbeatId = setInterval(beat, 10_000);
 
     // ── Resume after tab is brought back to foreground ───────
     // Prevents a user returning to the tab from appearing offline

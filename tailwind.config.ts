@@ -56,11 +56,33 @@ const config: Config = {
           "0%, 100%": { boxShadow: "0 0 5px rgba(0,255,65,0.3), 0 0 10px rgba(0,255,65,0.1)" },
           "50%":       { boxShadow: "0 0 15px rgba(0,255,65,0.6), 0 0 30px rgba(0,255,65,0.2)" },
         },
+        // Matrix-decode: incoming SSE messages flash green then settle to normal text colour
+        "msg-decode": {
+          "0%":   {
+            opacity: "0",
+            filter:  "brightness(4) blur(1.5px)",
+            color:   "#00FF41",
+            letterSpacing: "0.08em",
+          },
+          "40%":  {
+            opacity: "0.85",
+            filter:  "brightness(2) blur(0px)",
+            color:   "#00FF41",
+            letterSpacing: "0.02em",
+          },
+          "100%": {
+            opacity: "1",
+            filter:  "brightness(1) blur(0px)",
+            color:   "inherit",
+            letterSpacing: "normal",
+          },
+        },
       },
       animation: {
         "cursor-blink":  "cursor-blink 1s step-end infinite",
         "fade-in-up":    "fade-in-up 0.6s ease-out forwards",
         "glow-pulse":    "glow-pulse 2s ease-in-out infinite",
+        "msg-decode":    "msg-decode 0.55s ease-out forwards",
       },
 
       // ─── Box Shadows ─────────────────────────────────────────────────────

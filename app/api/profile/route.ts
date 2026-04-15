@@ -3,7 +3,7 @@
 // No special permissions required — any logged-in user may call this.
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSession }                from "@/lib/auth";
+import { getSession, setSession }    from "@/lib/auth";
 import { supabaseAdmin }             from "@/lib/supabase/server";
 
 export async function PATCH(req: NextRequest) {
@@ -35,6 +35,10 @@ export async function PATCH(req: NextRequest) {
     .eq("id", session.id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Keep the session cookie in sync so session.name reflects the new name
+  // immediately — without this the header shows the old name until next login.
+  await setSession({ ...session, name: raw });
 
   return NextResponse.json({ ok: true });
 }

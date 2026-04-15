@@ -135,9 +135,11 @@ export function ChatSidebar({
     setSearching(false);
     setQuery("");
     setResults([]);
-    // Pass the handle so the parent can inject a placeholder entry immediately
+    // Pass the handle so the parent injects a placeholder immediately.
+    // Do NOT call onRefreshDms here — the server has no record of this
+    // conversation yet (no messages sent), so it would overwrite the
+    // placeholder and produce "@unknown" in the header.
     onSelect(`dm:${user.id}`, "dm", user.id, user.username);
-    onRefreshDms();
   }
 
   function closeSearch() {

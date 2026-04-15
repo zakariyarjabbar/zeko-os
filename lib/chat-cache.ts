@@ -173,6 +173,14 @@ class ChatCacheStore {
     this.persist("chs", data);
   }
 
+  /**
+   * Mark the channel list as stale so the next consumer triggers a background
+   * re-fetch. The data itself is kept so the UI doesn't flash empty.
+   */
+  invalidateChannels(): void {
+    if (this.chans) this.chans.fetchedAt = 0;
+  }
+
   // ── DM conversation list ──────────────────────────────────────────────────
 
   getDmConvos(): DMConversation[] | null {
@@ -186,6 +194,14 @@ class ChatCacheStore {
   setDmConvos(data: DMConversation[]): void {
     this.dms = { data, fetchedAt: ChatCacheStore.now() };
     this.persist("dmc", data);
+  }
+
+  /**
+   * Mark the DM conversation list as stale — triggers a background re-fetch
+   * on the next consumer call without clearing the displayed list.
+   */
+  invalidateDmConvos(): void {
+    if (this.dms) this.dms.fetchedAt = 0;
   }
 
   // ── Presence map ──────────────────────────────────────────────────────────

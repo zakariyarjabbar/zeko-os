@@ -150,7 +150,7 @@ export function SystemHeader({ session, profile }: SystemHeaderProps) {
           <LiveClock />
           <span className="w-px h-3 bg-zk-border/60" />
           <span className="font-mono text-[11px] text-zk-muted/40 tracking-widest select-none">
-            {session.name.toLowerCase()}
+            {(profile.displayName || session.name).toLowerCase()}
           </span>
         </div>
 

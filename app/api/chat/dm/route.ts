@@ -4,8 +4,9 @@
 // GET  /api/chat/dm/conversations — list all DM conversations (via ?conversations=1)
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
-import { supabaseAdmin } from "@/lib/supabase/server";
+import { getSession }                from "@/lib/auth";
+import { supabaseAdmin }             from "@/lib/supabase/server";
+import { SendDMSchema }              from "@/lib/validations/chat";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -79,32 +80,41 @@ export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  let body: { toUserId?: string; text?: string };
-  try { body = await req.json(); }
-  catch { return NextResponse.json({ error: "Invalid body" }, { status: 400 }); }
+  let raw: unknown;
+  try { raw = await req.json(); }
+  catch { return NextResponse.json({ error: "Invalid body." }, { status: 400 }); }
 
-  const { toUserId, text } = body;
-  if (!toUserId || !text?.trim()) {
-    return NextResponse.json({ error: "toUserId and text required" }, { status: 400 });
+  const parsed = SendDMSchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.errors[0]?.message ?? "Invalid payload." },
+      { status: 400 }
+    );
   }
+  const { toUserId, text } = parsed.data;
 
-  // Get recipient handle
-  const { data: toProfile } = await supabaseAdmin
-    .from("profiles")
-    .select("username")
-    .eq("id", toUserId)
-    .single();
+  // Fetch both sender and recipient profiles in parallel
+  const [{ data: fromProfile }, { data: toProfile }] = await Promise.all([
+    supabaseAdmin.from("profiles").select("display_name, username").eq("id", session.id).single(),
+    supabaseAdmin.from("profiles").select("display_name, username").eq("id", toUserId).single(),
+  ]);
 
-  const toHandle = (toProfile as { username: string } | null)?.username ?? "unknown";
+  type ProfileRow = { display_name: string; username: string } | null;
+  const fp = fromProfile as ProfileRow;
+  const tp = toProfile   as ProfileRow;
+
+  // Use display_name as the handle; fall back to username, then session.name
+  const fromHandle = (fp?.display_name?.trim() || fp?.username || session.name).toLowerCase();
+  const toHandle   = (tp?.display_name?.trim() || tp?.username || "unknown").toLowerCase();
 
   const { data, error } = await supabaseAdmin
     .from("direct_messages")
     .insert({
       from_user_id: session.id,
       to_user_id:   toUserId,
-      from_handle:  session.name.toLowerCase(),
+      from_handle:  fromHandle,
       to_handle:    toHandle,
-      body:         text.trim(),
+      body:         text,   // already trimmed + sanitized by Zod transform
       read:         false,
     })
     .select("id, from_user_id, to_user_id, from_handle, to_handle, body, read, created_at")

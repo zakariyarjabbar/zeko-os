@@ -8,10 +8,11 @@
 //   send:    authenticated = can send (no extra perm needed)
 //   delete:  user needs "delete-msg:<channelId>" in access_flags (or Administrator)
 
-import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
-import { supabaseAdmin } from "@/lib/supabase/server";
-import { getEffectiveFlags } from "@/lib/effective-flags";
+import { NextRequest, NextResponse }        from "next/server";
+import { getSession }                        from "@/lib/auth";
+import { supabaseAdmin }                     from "@/lib/supabase/server";
+import { getEffectiveFlags }                 from "@/lib/effective-flags";
+import { SendChannelMessageSchema }          from "@/lib/validations/chat";
 
 function isAdmin(flags: string[]): boolean {
   return flags.includes("Administrator");
@@ -48,14 +49,18 @@ export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  let body: { channelId?: string; text?: string };
-  try { body = await req.json(); }
-  catch { return NextResponse.json({ error: "Invalid body" }, { status: 400 }); }
+  let raw: unknown;
+  try { raw = await req.json(); }
+  catch { return NextResponse.json({ error: "Invalid body." }, { status: 400 }); }
 
-  const { channelId, text } = body;
-  if (!channelId || !text?.trim()) {
-    return NextResponse.json({ error: "channelId and text required" }, { status: 400 });
+  const parsed = SendChannelMessageSchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.errors[0]?.message ?? "Invalid payload." },
+      { status: 400 }
+    );
   }
+  const { channelId, text } = parsed.data;
 
   // Must be able to view the channel to send in it
   const flags = await getEffectiveFlags(session.id);
@@ -68,7 +73,7 @@ export async function POST(req: NextRequest) {
     .insert({
       channel_id: channelId,
       user_id:    session.id,
-      body:       text.trim(),
+      body:       text,          // already trimmed + sanitized by Zod transform
       type:       "message",
     })
     .select("id, channel_id, user_id, body, type, created_at")

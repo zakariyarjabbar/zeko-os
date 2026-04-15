@@ -12,6 +12,7 @@ import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { useProfile } from "@/components/system/SessionContext";
 import { isFounder, canViewInbox, canViewUsers } from "@/lib/permissions";
+import { getAppCache } from "@/lib/app-cache";
 
 // ─── Permission check for nav items ──────────────────────────
 function checkFlag(requireFlag: string, flags: string[]): boolean {
@@ -108,21 +109,26 @@ export function SystemSidebar() {
   const founder  = isFounder(profile.accessFlags);
   const [unread, setUnread] = useState(0);
 
-  // Poll inbox unread count every 30s
+  // ── Unread count — driven by app cache, no polling ──────────
+  // ShellPrefetcher keeps the cache warm and dispatches "zk:cache:inbox"
+  // whenever it updates.  We just read the count from the cache.
   useEffect(() => {
-    async function fetchUnread() {
-      try {
-        const res  = await fetch("/api/inbox");
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          setUnread(data.filter((m: { read: boolean }) => !m.read).length);
-        }
-      } catch { /* silent */ }
+    if (!canViewInbox(profile.accessFlags)) return;
+
+    function syncUnread() {
+      const cached = getAppCache().getInbox();
+      if (cached) {
+        setUnread(cached.filter((m) => !m.read).length);
+      }
     }
-    fetchUnread();
-    const id = setInterval(fetchUnread, 30_000);
-    return () => clearInterval(id);
-  }, []);
+
+    // Read immediately (cache may already be warm from ShellPrefetcher)
+    syncUnread();
+
+    // Re-read whenever the cache is updated by ShellPrefetcher
+    window.addEventListener("zk:cache:inbox", syncUnread);
+    return () => window.removeEventListener("zk:cache:inbox", syncUnread);
+  }, [profile.accessFlags]);
 
   return (
     <aside className={cn(

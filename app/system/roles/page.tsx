@@ -13,12 +13,11 @@ import {
   Users, Key, Terminal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getAppCache } from "@/lib/app-cache";
+import type { CachedRole } from "@/lib/app-cache";
 
 // ─── Types ────────────────────────────────────────────────────
-interface Role {
-  id: string; name: string; description: string;
-  permissions: string[]; created_at: string; userCount: number;
-}
+type Role = CachedRole;
 interface AssignedUser {
   id: string; display_id: number; username: string; session_status: string;
 }
@@ -95,24 +94,37 @@ function blankRole() {
 }
 
 function RolesTab({ permissions }: { permissions: Permission[] }) {
-  const [roles,    setRoles]    = useState<Role[]>([]);
+  // Initialise from cache (instant) — skip the loading skeleton if we have data
+  const cachedRoles = getAppCache().getRoles();
+
+  const [roles,    setRoles]    = useState<Role[]>(cachedRoles ?? []);
   const [detail,   setDetail]   = useState<RoleDetail | null>(null);
   const [mode,     setMode]     = useState<RoleRightMode>("view");
   const [form,     setForm]     = useState(blankRole());
-  const [loading,  setLoading]  = useState(true);
+  const [loading,  setLoading]  = useState(cachedRoles === null);
   const [saving,   setSaving]   = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [toast,    setToast]    = useState<{ type: "ok" | "err"; msg: string } | null>(null);
 
-  const fetchRoles = useCallback(async () => {
-    setLoading(true);
+  const fetchRoles = useCallback(async (showSpinner = false) => {
+    if (showSpinner) setLoading(true);
     try {
-      const res = await fetch("/api/roles");
-      if (res.ok) setRoles(await res.json());
+      const res  = await fetch("/api/roles");
+      if (res.ok) {
+        const data = await res.json() as Role[];
+        getAppCache().setRoles(data);
+        setRoles(data);
+      }
     } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetchRoles(); }, [fetchRoles]);
+  useEffect(() => {
+    // Fetch only if cache is stale or empty
+    if (!getAppCache().isRolesFresh()) {
+      fetchRoles(!cachedRoles); // show spinner only on cold cache miss
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchRoles]);
 
   async function selectRole(id: string) {
     setToast(null);
@@ -199,7 +211,7 @@ function RolesTab({ permissions }: { permissions: Permission[] }) {
             <span className="font-mono text-[9px] text-zk-muted/35">({roles.length})</span>
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={fetchRoles} className="p-1 text-zk-muted/35 hover:text-zk-green transition-colors">
+            <button onClick={() => fetchRoles(true)} className="p-1 text-zk-muted/35 hover:text-zk-green transition-colors">
               <RefreshCw size={11} className={loading ? "animate-spin" : ""} />
             </button>
             <button

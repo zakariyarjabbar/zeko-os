@@ -54,17 +54,20 @@ export async function POST(req: NextRequest) {
     if (flags.includes("Administrator")) role = "admin";
   }
 
-  // ── Derive display name (username) ──────────────────────────
-  let displayName = meta.name;
-  if (!displayName) {
-    const { data: profileRow } = await supabaseAdmin
-      .from("profiles")
-      .select("username")
-      .eq("id", user.id)
-      .single();
-    const p = profileRow as { username: string } | null;
-    displayName = p?.username ?? email.split("@")[0];
-  }
+  // ── Derive display name — prefer the DB's current display_name ──
+  // profiles.display_name is the source of truth; user_metadata.name
+  // is only a snapshot taken at signup and is never updated thereafter.
+  const { data: profileRow } = await supabaseAdmin
+    .from("profiles")
+    .select("display_name, username")
+    .eq("id", user.id)
+    .single();
+  const p = profileRow as { display_name: string; username: string } | null;
+  const displayName =
+    p?.display_name?.trim() ||
+    meta.name?.trim() ||
+    p?.username ||
+    email.split("@")[0];
 
   // ── Set session cookie ───────────────────────────────────────
   await setSession({

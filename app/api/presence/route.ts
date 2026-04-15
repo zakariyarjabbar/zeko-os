@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession }    from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 
-const ONLINE_THRESHOLD_MS = 60 * 1000; // 60 s — must be > heartbeat interval (20 s)
+const ONLINE_THRESHOLD_MS = 25 * 1000; // 25 s — must be > heartbeat interval (10 s)
 
 // ── POST — heartbeat ───────────────────────────────────────────
 export async function POST() {

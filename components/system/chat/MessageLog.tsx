@@ -8,7 +8,7 @@
 
 "use client";
 
-import { useEffect, useRef, useMemo, useState, useCallback } from "react";
+import { useEffect, useRef, useMemo, useState, useCallback, memo } from "react";
 import { Trash2 }            from "lucide-react";
 import { cn }                from "@/lib/utils";
 import { type ChatMessage }  from "./types";
@@ -27,6 +27,11 @@ interface MessageLogProps {
   presence?:     Record<string, "ONLINE" | "OFFLINE">;
   /** Called when the user clicks "Send Direct Message" inside the popover */
   onOpenDm?:    (userId: string, username: string) => void;
+  /**
+   * Changes whenever the active channel/DM switches.
+   * Used to reset the "seen ids" tracker so animations don't carry over.
+   */
+  conversationKey?: string;
 }
 
 // ─── Message grouping ─────────────────────────────────────────
@@ -126,10 +131,11 @@ interface MessageGroupBlockProps {
   onDelete:     (id: string) => void;
   isOwnGroup:   boolean;
   onAvatarClick: (e: React.MouseEvent) => void;
+  newIds:       Set<string>;
 }
 
 function MessageGroupBlock({
-  group, displayName, canDelete, onDelete, isOwnGroup, onAvatarClick,
+  group, displayName, canDelete, onDelete, isOwnGroup, onAvatarClick, newIds,
 }: MessageGroupBlockProps) {
   const color = avatarColor(group.userId);  // userId is stable even after renames
 
@@ -178,6 +184,7 @@ function MessageGroupBlock({
             <span className={cn(
               "font-mono text-[12px] text-zk-white/90 leading-relaxed break-words min-w-0 flex-1",
               msg.id.startsWith("opt-") && "opacity-50",
+              newIds.has(msg.id) && "animate-msg-decode",
             )}>
               {msg.text}
             </span>
@@ -275,10 +282,40 @@ interface PopoverState {
 // ─── Component ────────────────────────────────────────────────
 export function MessageLog({
   messages, canDelete, onDelete, currentUserId, loading,
-  userProfiles = {}, presence = {}, onOpenDm,
+  userProfiles = {}, presence = {}, onOpenDm, conversationKey,
 }: MessageLogProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [popover, setPopover] = useState<PopoverState | null>(null);
+
+  // ── Decode-animation tracking ─────────────────────────────
+  // seenIds holds every message ID that has already been rendered at least once.
+  // On mount and on conversation switch, all current IDs are pre-seeded so
+  // they never animate. Only IDs that arrive AFTER the initial render get the
+  // msg-decode animation.
+  const seenIds = useRef<Set<string>>(new Set());
+
+  // Reset when the conversation changes (channel/DM switch)
+  useEffect(() => {
+    seenIds.current = new Set();
+  }, [conversationKey]);
+
+  // After every render, record all displayed IDs as seen
+  useEffect(() => {
+    messages.forEach((m) => seenIds.current.add(m.id));
+  });
+
+  // Compute which IDs are genuinely new THIS render cycle
+  // (not yet in seenIds = arrived via SSE while page was open)
+  const newIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const m of messages) {
+      if (!seenIds.current.has(m.id) && !m.id.startsWith("opt-")) {
+        s.add(m.id);
+      }
+    }
+    return s;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages]); // seenIds.current intentionally omitted — it's a mutable ref
 
   // Flat list of { separator | group } items grouped by date
   const items = useMemo(() => {
@@ -360,6 +397,7 @@ export function MessageLog({
               onDelete={onDelete}
               isOwnGroup={group.userId === currentUserId}
               onAvatarClick={(e) => handleAvatarClick(e, group)}
+              newIds={newIds}
             />
           );
         })}

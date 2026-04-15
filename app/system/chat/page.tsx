@@ -96,8 +96,12 @@ export default function ChatPage() {
   const fetchedUserIds = useRef<Set<string>>(new Set());
 
   // Stable refs — never trigger re-renders
-  const activeKeyRef = useRef<string>("");
-  const pollRef      = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activeKeyRef  = useRef<string>("");
+  const sseRef        = useRef<EventSource | null>(null);
+  // Mirrors activeDmUser/isDm as refs so stable callbacks can read the
+  // current value without needing to be re-registered on every change.
+  const activeDmRef   = useRef<string | undefined>(undefined);
+  const isDmRef       = useRef<boolean>(false);
 
   const isAdmin   = profile.accessFlags.includes("Administrator");
   const canDelete = isDm
@@ -155,6 +159,33 @@ export default function ChatPage() {
     finally   { setLoadingDms(false); }
   }, []);
 
+  // Keep refs in sync with state so stable callbacks always see current values
+  useEffect(() => { activeDmRef.current = activeDmUser; }, [activeDmUser]);
+  useEffect(() => { isDmRef.current     = isDm;         }, [isDm]);
+
+  // ── Sync DM convos from ShellPrefetcher cache updates ──────
+  // ShellPrefetcher dispatches "zk:cache:dm" when it re-fetches after an
+  // SSE event.  We sync the list from cache here, but if the active DM is
+  // open we keep its unread count at 0 — the loadMessages fetch already
+  // marked the messages read server-side, so any brief unread > 0 in the
+  // re-fetched data is a race condition we override optimistically.
+  useEffect(() => {
+    function onDmCacheUpdate() {
+      const cached = getChatCache().getDmConvos();
+      if (!cached) return;
+      const activeId = activeDmRef.current;
+      if (isDmRef.current && activeId) {
+        setDmConvos(cached.map((d) =>
+          d.userId === activeId ? { ...d, unread: 0 } : d,
+        ));
+      } else {
+        setDmConvos(cached);
+      }
+    }
+    window.addEventListener("zk:cache:dm", onDmCacheUpdate);
+    return () => window.removeEventListener("zk:cache:dm", onDmCacheUpdate);
+  }, []); // stable — reads state via refs
+
   // ── Hydrate + initial load ─────────────────────────────────
   //
   // hydrate() populates the in-memory cache from sessionStorage so that
@@ -199,22 +230,23 @@ export default function ChatPage() {
     } catch { /* silent */ }
   }, []);
 
+  // Initial presence fetch when DM convos load (cold start or new convo)
   useEffect(() => {
     const ids = dmConvos.map((d) => d.userId);
     fetchPresence(ids);
   }, [dmConvos, fetchPresence]);
 
+  // ShellPrefetcher pushes presence changes via the events SSE.
+  // When it does, it updates the chat cache and dispatches this event.
+  // We read from the cache — no extra network call needed.
   useEffect(() => {
-    const dmIds = dmConvos.map((d) => d.userId);
-    // Read fetchedUserIds.current inside the interval callback so it always
-    // includes message authors added after the effect first ran.
-    const id = setInterval(() => {
-      const allIds = [...new Set([...dmIds, ...fetchedUserIds.current])];
-      if (allIds.length === 0) return;
-      fetchPresence(allIds);
-    }, 20_000);
-    return () => clearInterval(id);
-  }, [dmConvos, fetchPresence]);
+    function onPresencePush() {
+      const cached = getChatCache().getPresence();
+      if (cached) setPresence(cached);
+    }
+    window.addEventListener("zk:cache:presence", onPresencePush);
+    return () => window.removeEventListener("zk:cache:presence", onPresencePush);
+  }, []);
 
   // ── Resolve current display names + presence for message authors ──
   //
@@ -331,15 +363,86 @@ export default function ChatPage() {
     loadMessages(activeChannel, activeDmUser);
   }, [activeChannel, activeDmUser, loadMessages]);
 
-  // ── Message poll (real-time new messages) ──────────────────
+  // ── SSE real-time feed ─────────────────────────────────────
   //
-  // Runs every 4 s for the active channel/DM.
-  // Uses cache.mergeMessages — only updates React state when new messages arrive.
-  // Optimistic messages (opt-xxx) are kept in state until server confirms them.
+  // Opens a Server-Sent Events connection for the active conversation.
+  // On each "msg" event the server pushes only rows newer than the
+  // connection-open timestamp, so there are at most a handful of rows
+  // per event.  mergeMessages deduplicates them against the LRU cache
+  // so optimistic messages are never clobbered.
+  //
+  // If the connection drops, EventSource auto-reconnects (built-in
+  // browser behaviour).  The 30 s fallback poll below also acts as a
+  // safety net for any messages missed during reconnect windows.
   useEffect(() => {
-    if (pollRef.current) clearInterval(pollRef.current);
+    // Close any previous connection for the old conversation
+    if (sseRef.current) {
+      sseRef.current.close();
+      sseRef.current = null;
+    }
 
-    pollRef.current = setInterval(async () => {
+    // Capture the conversation context at setup time so the handler
+    // closure doesn't go stale when state updates mid-session.
+    const capturedIsDm    = isDm;
+    const capturedDmUser  = activeDmUser;
+    const capturedChannel = activeChannel;
+    const key             = cacheKey(capturedChannel, capturedIsDm ? capturedDmUser : undefined);
+
+    const url = capturedIsDm && capturedDmUser
+      ? `/api/chat/stream?type=dm&with=${capturedDmUser}`
+      : `/api/chat/stream?type=channel&id=${capturedChannel}`;
+
+    const es = new EventSource(url);
+    sseRef.current = es;
+
+    es.addEventListener("msg", (e: MessageEvent) => {
+      try {
+        const rows = JSON.parse(e.data as string) as unknown[];
+        if (!Array.isArray(rows) || rows.length === 0) return;
+
+        const cache = getChatCache();
+        let incoming: ChatMessage[];
+
+        if (capturedIsDm && capturedDmUser) {
+          incoming = (rows as DMRow[]).map((m) => dmRowToMessage(m, session.id));
+        } else {
+          incoming = (rows as MessageRow[]).map(rowToMessage);
+        }
+
+        // Merge into cache — no-op + { changed: false } if nothing new
+        const { changed } = cache.mergeMessages(key, incoming);
+        if (!changed || activeKeyRef.current !== key) return;
+
+        // Rebuild state: confirmed cache + still-pending optimistic entries
+        const confirmed = cache.getMessages(key) ?? [];
+        setMessages((prev) => {
+          const pendingOpts = prev.filter(
+            (m) =>
+              m.id.startsWith("opt-") &&
+              !confirmed.some((c) => c.user === m.user && c.text === m.text),
+          );
+          return [...confirmed, ...pendingOpts];
+        });
+      } catch { /* malformed SSE payload — ignore */ }
+    });
+
+    return () => {
+      es.close();
+      sseRef.current = null;
+    };
+  }, [activeChannel, activeDmUser, isDm, session.id]);
+
+  // ── 30 s fallback poll ─────────────────────────────────────
+  //
+  // Fires every 30 s to catch messages that slipped through during
+  // an SSE reconnect window.  Skipped entirely when the SSE socket
+  // is open and healthy.  Uses the same merge + state-rebuild logic
+  // as the SSE handler so there is no duplicate state update risk.
+  useEffect(() => {
+    const id = setInterval(async () => {
+      // SSE is alive — skip to avoid redundant fetches
+      if (sseRef.current?.readyState === EventSource.OPEN) return;
+
       const cache = getChatCache();
       const key   = cacheKey(activeChannel, isDm ? activeDmUser : undefined);
 
@@ -360,14 +463,11 @@ export default function ChatPage() {
           incoming = data.map(rowToMessage);
         }
 
-        // Merge into cache — returns { changed: false } when nothing new
         const { changed } = cache.mergeMessages(key, incoming);
         if (!changed || activeKeyRef.current !== key) return;
 
-        // Rebuild state: confirmed messages from cache + still-pending optimistics
         const confirmed = cache.getMessages(key) ?? [];
         setMessages((prev) => {
-          // Keep optimistic entries whose user+text hasn't been confirmed yet
           const pendingOpts = prev.filter(
             (m) =>
               m.id.startsWith("opt-") &&
@@ -376,9 +476,9 @@ export default function ChatPage() {
           return [...confirmed, ...pendingOpts];
         });
       } catch { /* silent */ }
-    }, 4_000);
+    }, 30_000);
 
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    return () => clearInterval(id);
   }, [activeChannel, activeDmUser, isDm, session.id]);
 
   // ── Sidebar select ─────────────────────────────────────────
@@ -388,18 +488,27 @@ export default function ChatPage() {
       setActiveChannel(id);
       setIsDm(true);
 
-      // If this conversation isn't in the list yet (new DM from search),
-      // inject a placeholder immediately so the header shows the right handle
-      // and the sidebar item is stable before onRefreshDms() returns.
-      if (dmHandle) {
-        setDmConvos((prev) => {
-          if (prev.some((d) => d.userId === dmUserId)) return prev;
+      setDmConvos((prev) => {
+        // Existing conversation — clear the unread badge immediately.
+        // loadMessages fetches the thread which marks messages read server-side;
+        // we optimistically zero the badge here so it disappears at click time.
+        if (prev.some((d) => d.userId === dmUserId)) {
+          const updated = prev.map((d) =>
+            d.userId === dmUserId ? { ...d, unread: 0 } : d,
+          );
+          // Keep the cache in sync so the sidebar also clears
+          getChatCache().setDmConvos(updated);
+          return updated;
+        }
+        // New conversation (opened from search): inject a fresh placeholder
+        if (dmHandle) {
           return [
             { userId: dmUserId, handle: dmHandle, unread: 0, lastMsg: "", lastTime: "" },
             ...prev,
           ];
-        });
-      }
+        }
+        return prev;
+      });
     } else {
       setActiveDmUser(undefined);
       setActiveChannel(id);
@@ -424,7 +533,7 @@ export default function ChatPage() {
       channel:   isDm && activeDmUser ? `dm:${activeDmUser}` : activeChannel,
       timestamp: nowTimestamp(),
       date:      new Date().toISOString().slice(0, 10),
-      user:      session.name.toLowerCase(),
+      user:      (profile.displayName || session.name).toLowerCase(),
       userId:    session.id,
       text,
       type:      "message",
@@ -505,6 +614,10 @@ export default function ChatPage() {
   }
 
   // ── Derived header values ──────────────────────────────────
+  // conversationKey changes whenever the user switches channel/DM.
+  // MessageLog uses it to reset its "seenIds" tracker so only messages
+  // that arrive via SSE *after* the switch play the decode animation.
+  const convKey   = cacheKey(activeChannel, isDm ? activeDmUser : undefined);
   const activeCh  = channels.find((c) => c.id === activeChannel);
   const activeDm  = dmConvos.find((d) => d.userId === activeDmUser);
 
@@ -514,7 +627,7 @@ export default function ChatPage() {
 
   const headerTopic = isDm ? "direct message" : (activeCh?.topic ?? "");
   const memberCount = isDm ? 0 : channelOnline;
-  const username    = session.name.toLowerCase();
+  const username    = (profile.displayName || session.name).toLowerCase();
 
   // ── Render ─────────────────────────────────────────────────
   return (
@@ -610,6 +723,7 @@ export default function ChatPage() {
               userProfiles={userProfiles}
               presence={presence}
               onOpenDm={handleOpenDm}
+              conversationKey={convKey}
             />
             <CliInput
               channelLabel={headerLabel}
