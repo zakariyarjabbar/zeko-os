@@ -20,7 +20,7 @@ import {
 
 interface MessageRow {
   id: string; channel_id: string; user_id: string;
-  user_handle: string; body: string; type: string; created_at: string;
+  body: string; type: string; created_at: string;
 }
 
 interface DMRow {
@@ -37,7 +37,7 @@ function rowToMessage(m: MessageRow): ChatMessage {
     channel:   m.channel_id,
     timestamp: d.toTimeString().slice(0, 8),
     date:      d.toISOString().slice(0, 10),
-    user:      m.user_handle,
+    user:      "",   // resolved live from userProfiles[userId]
     userId:    m.user_id,
     text:      m.body,
     type:      m.type as "message" | "system",
@@ -86,6 +86,14 @@ export default function ChatPage() {
   const [forbidden,       setForbidden]       = useState(false);
   const [presence,        setPresence]        = useState<Record<string, "ONLINE" | "OFFLINE">>({});
   const [channelOnline,   setChannelOnline]   = useState(0);
+
+  /** Live profile map: userId → { displayName, username }
+   *  Populated on demand when new userIds appear in messages. */
+  const [userProfiles, setUserProfiles] = useState<
+    Record<string, { displayName: string; username: string }>
+  >({});
+  // Tracks which ids have already been fetched so we don't repeat requests
+  const fetchedUserIds = useRef<Set<string>>(new Set());
 
   // Stable refs — never trigger re-renders
   const activeKeyRef = useRef<string>("");
@@ -197,11 +205,48 @@ export default function ChatPage() {
   }, [dmConvos, fetchPresence]);
 
   useEffect(() => {
-    const ids = dmConvos.map((d) => d.userId);
-    if (ids.length === 0) return;
-    const id = setInterval(() => fetchPresence(ids), 20_000);
+    const dmIds = dmConvos.map((d) => d.userId);
+    // Read fetchedUserIds.current inside the interval callback so it always
+    // includes message authors added after the effect first ran.
+    const id = setInterval(() => {
+      const allIds = [...new Set([...dmIds, ...fetchedUserIds.current])];
+      if (allIds.length === 0) return;
+      fetchPresence(allIds);
+    }, 20_000);
     return () => clearInterval(id);
   }, [dmConvos, fetchPresence]);
+
+  // ── Resolve current display names + presence for message authors ──
+  //
+  // Runs whenever the messages list changes. Collects any userId that
+  // hasn't been fetched yet, hits /api/chat/profiles, and also fetches
+  // presence so the profile popover always shows the correct online status.
+  // fetchedUserIds ref prevents duplicate profile requests; presence has
+  // its own TTL/merge logic inside fetchPresence.
+  useEffect(() => {
+    const newIds = [...new Set(
+      messages
+        .map((m) => m.userId)
+        .filter((id) => id && !fetchedUserIds.current.has(id)),
+    )];
+    if (newIds.length === 0) return;
+
+    newIds.forEach((id) => fetchedUserIds.current.add(id));
+
+    // Profiles — only fetch each userId once
+    fetch(`/api/chat/profiles?ids=${newIds.join(",")}`)
+      .then((r) => r.json())
+      .then((data: Record<string, { displayName: string; username: string }>) => {
+        if (typeof data === "object" && !Array.isArray(data)) {
+          setUserProfiles((prev) => ({ ...prev, ...data }));
+        }
+      })
+      .catch(() => {/* silent */});
+
+    // Presence — fetch for new authors so the popover shows the correct status.
+    // setPresence merges with the existing DM presence map so no data is lost.
+    fetchPresence(newIds);
+  }, [messages, fetchPresence]);
 
   // ── Channel online count ───────────────────────────────────
   //
@@ -337,11 +382,24 @@ export default function ChatPage() {
   }, [activeChannel, activeDmUser, isDm, session.id]);
 
   // ── Sidebar select ─────────────────────────────────────────
-  function handleSelect(id: string, type: "channel" | "dm", dmUserId?: string) {
+  function handleSelect(id: string, type: "channel" | "dm", dmUserId?: string, dmHandle?: string) {
     if (type === "dm" && dmUserId) {
       setActiveDmUser(dmUserId);
       setActiveChannel(id);
       setIsDm(true);
+
+      // If this conversation isn't in the list yet (new DM from search),
+      // inject a placeholder immediately so the header shows the right handle
+      // and the sidebar item is stable before onRefreshDms() returns.
+      if (dmHandle) {
+        setDmConvos((prev) => {
+          if (prev.some((d) => d.userId === dmUserId)) return prev;
+          return [
+            { userId: dmUserId, handle: dmHandle, unread: 0, lastMsg: "", lastTime: "" },
+            ...prev,
+          ];
+        });
+      }
     } else {
       setActiveDmUser(undefined);
       setActiveChannel(id);
@@ -439,6 +497,11 @@ export default function ChatPage() {
     } catch {
       loadMessages(activeChannel, activeDmUser);
     }
+  }
+
+  // ── Open a DM from the profile card ───────────────────────
+  function handleOpenDm(userId: string, username: string) {
+    handleSelect(`dm:${userId}`, "dm", userId, username);
   }
 
   // ── Derived header values ──────────────────────────────────
@@ -544,6 +607,9 @@ export default function ChatPage() {
               onDelete={handleDelete}
               currentUserId={session.id}
               loading={loadingMsgs}
+              userProfiles={userProfiles}
+              presence={presence}
+              onOpenDm={handleOpenDm}
             />
             <CliInput
               channelLabel={headerLabel}

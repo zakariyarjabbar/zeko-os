@@ -27,7 +27,7 @@ interface SearchResult {
 interface ChatSidebarProps {
   channels:        Channel[];
   activeChannel:   string;
-  onSelect:        (id: string, type: "channel" | "dm", dmUserId?: string) => void;
+  onSelect:        (id: string, type: "channel" | "dm", dmUserId?: string, dmHandle?: string) => void;
   dmConvos:        DMConversation[];
   activeDmUser?:   string;
   onRefreshDms:    () => void;
@@ -135,7 +135,8 @@ export function ChatSidebar({
     setSearching(false);
     setQuery("");
     setResults([]);
-    onSelect(`dm:${user.id}`, "dm", user.id);
+    // Pass the handle so the parent can inject a placeholder entry immediately
+    onSelect(`dm:${user.id}`, "dm", user.id, user.username);
     onRefreshDms();
   }
 

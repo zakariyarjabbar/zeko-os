@@ -6,8 +6,9 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { Bell, User, LogOut, Terminal } from "lucide-react";
-import { AlertsPanel }   from "./AlertsPanel";
-import { ProfileDrawer } from "./ProfileDrawer";
+import { AlertsPanel }    from "./AlertsPanel";
+import { ProfileDrawer }  from "./ProfileDrawer";
+import { AuthTransition } from "@/components/ui/AuthTransition";
 import { useRouter, usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { type UserProfile } from "@/lib/profile";
@@ -95,25 +96,31 @@ function IconBtn({
 export function SystemHeader({ session, profile }: SystemHeaderProps) {
   const router    = useRouter();
   const pathname  = usePathname();
-  const [loggingOut,   setLoggingOut]   = useState(false);
-  const [alertsOpen,   setAlertsOpen]   = useState(false);
-  const [alerts,       setAlerts]       = useState<SystemAlert[]>(INITIAL_ALERTS);
-  const [profileOpen,  setProfileOpen]  = useState(false);
+  const [loggingOut,        setLoggingOut]        = useState(false);
+  const [alertsOpen,        setAlertsOpen]        = useState(false);
+  const [alerts,            setAlerts]            = useState<SystemAlert[]>(INITIAL_ALERTS);
+  const [profileOpen,       setProfileOpen]       = useState(false);
+  const [logoutTransition,  setLogoutTransition]  = useState(false);
 
   const criticalCount = alerts.filter((a) => a.severity === "critical").length;
   const routeLabel    = ROUTE_LABELS[pathname] ?? "System";
 
   async function handleLogout() {
     setLoggingOut(true);
-    // Set offline first while the session cookie is still valid,
-    // then clear the session and redirect.
     await fetch("/api/presence", { method: "DELETE" });
     await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
+    // Fire cinematic transition — router.push happens inside onComplete
+    setLogoutTransition(true);
   }
 
   return (
     <>
+      {logoutTransition && (
+        <AuthTransition
+          mode="logout"
+          onComplete={() => router.push("/login")}
+        />
+      )}
       <header className={cn(
         "h-11 flex items-center justify-between px-5 shrink-0 relative",
         "border-b border-zk-border/60",

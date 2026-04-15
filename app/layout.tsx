@@ -31,7 +31,7 @@ export const viewport: Viewport = {
 
 // ─── Metadata ────────────────────────────────────────────────
 export const metadata: Metadata = {
-  title: "Zeko OS — High-Performance Digital Environment",
+  title: "zeko OS",
   description:
     "Zeko OS is a precision-engineered digital environment built for performance, security, and scale. Initializing now.",
   keywords: [

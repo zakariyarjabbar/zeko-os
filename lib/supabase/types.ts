@@ -54,20 +54,18 @@ export type Database = {
       };
       messages: {
         Row: {
-          id:          string;
-          channel_id:  string;
-          user_id:     string | null;
-          user_handle: string;
-          body:        string;
-          type:        "message" | "system";
-          created_at:  string;
+          id:         string;
+          channel_id: string;
+          user_id:    string | null;
+          body:       string;
+          type:       "message" | "system";
+          created_at: string;
         };
         Insert: {
-          channel_id:  string;
-          user_id?:    string | null;
-          user_handle: string;
-          body:        string;
-          type?:       "message" | "system";
+          channel_id: string;
+          user_id?:   string | null;
+          body:       string;
+          type?:      "message" | "system";
         };
         Update: {
           body?: string;

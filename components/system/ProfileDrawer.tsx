@@ -10,6 +10,7 @@ import { X, LogOut, Terminal, Wifi, WifiOff, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { type UserProfile } from "@/lib/profile";
+import { AuthTransition } from "@/components/ui/AuthTransition";
 
 interface ProfileDrawerProps {
   open:    boolean;
@@ -94,6 +95,8 @@ export function ProfileDrawer({ open, profile, onClose }: ProfileDrawerProps) {
     hour: "2-digit", minute: "2-digit", second: "2-digit",
   });
 
+  const [logoutTransition, setLogoutTransition] = useState(false);
+
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
@@ -102,10 +105,18 @@ export function ProfileDrawer({ open, profile, onClose }: ProfileDrawerProps) {
   async function handleTerminate() {
     setTerminating(true);
     await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
+    // Trigger cinematic logout — router.push happens inside onComplete
+    setLogoutTransition(true);
   }
 
   return (
+    <>
+    {logoutTransition && (
+      <AuthTransition
+        mode="logout"
+        onComplete={() => router.push("/login")}
+      />
+    )}
     <AnimatePresence>
       {open && (
         <>
@@ -271,5 +282,6 @@ export function ProfileDrawer({ open, profile, onClose }: ProfileDrawerProps) {
         </>
       )}
     </AnimatePresence>
+    </>
   );
 }

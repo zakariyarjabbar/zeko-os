@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabaseAdmin
     .from("messages")
-    .select("id, channel_id, user_id, user_handle, body, type, created_at")
+    .select("id, channel_id, user_id, body, type, created_at")
     .eq("channel_id", channelId)
     .order("created_at", { ascending: true })
     .limit(200);
@@ -66,13 +66,12 @@ export async function POST(req: NextRequest) {
   const { data, error } = await supabaseAdmin
     .from("messages")
     .insert({
-      channel_id:  channelId,
-      user_id:     session.id,
-      user_handle: session.name.toLowerCase(),
-      body:        text.trim(),
-      type:        "message",
+      channel_id: channelId,
+      user_id:    session.id,
+      body:       text.trim(),
+      type:       "message",
     })
-    .select("id, channel_id, user_id, user_handle, body, type, created_at")
+    .select("id, channel_id, user_id, body, type, created_at")
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

@@ -11,6 +11,7 @@ import Link                    from "next/link";
 import { GlassCard }           from "@/components/ui/GlassCard";
 import { Button }              from "@/components/ui/Button";
 import { Badge }               from "@/components/ui/Badge";
+import { AuthTransition }      from "@/components/ui/AuthTransition";
 import { cn }                  from "@/lib/utils";
 
 // ─── Boot lines ───────────────────────────────────────────────
@@ -95,11 +96,13 @@ function TerminalField({
 export default function SignupPage() {
   const router = useRouter();
 
-  const [email,       setEmail]       = useState("");
-  const [password,    setPassword]    = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [error,       setError]       = useState<string | null>(null);
-  const [loading,     setLoading]     = useState(false);
+  const [email,         setEmail]         = useState("");
+  const [password,      setPassword]      = useState("");
+  const [displayName,   setDisplayName]   = useState("");
+  const [error,         setError]         = useState<string | null>(null);
+  const [loading,       setLoading]       = useState(false);
+  const [transitioning, setTransitioning] = useState(false);
+  const [redirectTo,    setRedirectTo]    = useState("/system/overview");
 
   // Boot sequence
   const [bootLines, setBootLines] = useState<string[]>([]);
@@ -161,8 +164,9 @@ export default function SignupPage() {
         return;
       }
 
-      // data.redirect means auto-login failed — send them to login
-      router.push(data.redirect ?? "/system/overview");
+      // Fire cinematic transition — router.push happens inside onComplete
+      setRedirectTo(data.redirect ?? "/system/overview");
+      setTransitioning(true);
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -171,6 +175,13 @@ export default function SignupPage() {
   }
 
   return (
+    <>
+    {transitioning && (
+      <AuthTransition
+        mode="login"
+        onComplete={() => router.push(redirectTo)}
+      />
+    )}
     <main className="min-h-screen flex flex-col items-center justify-center px-4 relative overflow-hidden">
 
       {/* ── Background effects ───────────────────────────────── */}
@@ -320,5 +331,6 @@ export default function SignupPage() {
         </p>
       </div>
     </main>
+    </>
   );
 }

@@ -1,33 +1,43 @@
 // components/system/chat/MessageLog.tsx
 // Grouped message log — consecutive messages from the same user
 // within 5 minutes are collapsed into a single visual group.
-// First message shows avatar initial + username + timestamp.
-// Continuation messages show body only, indented.
+//
+// Display names are resolved live from `userProfiles` so renaming
+// a user is reflected immediately without stale handles.
+// Clicking an avatar or name opens a small UserProfileCard popover.
 
 "use client";
 
-import { useEffect, useRef, useMemo } from "react";
-import { Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { type ChatMessage } from "./types";
+import { useEffect, useRef, useMemo, useState, useCallback } from "react";
+import { Trash2 }            from "lucide-react";
+import { cn }                from "@/lib/utils";
+import { type ChatMessage }  from "./types";
+import { UserProfileCard }   from "./UserProfileCard";
 
+// ─── Props ────────────────────────────────────────────────────
 interface MessageLogProps {
-  messages:  ChatMessage[];
-  canDelete: boolean;
-  onDelete:  (id: string) => void;
+  messages:      ChatMessage[];
+  canDelete:     boolean;
+  onDelete:      (id: string) => void;
   currentUserId: string;
-  loading?:  boolean;
+  loading?:      boolean;
+  /** Current resolved display names: userId → { displayName, username } */
+  userProfiles?: Record<string, { displayName: string; username: string }>;
+  /** Live online/offline map used in the profile popover */
+  presence?:     Record<string, "ONLINE" | "OFFLINE">;
+  /** Called when the user clicks "Send Direct Message" inside the popover */
+  onOpenDm?:    (userId: string, username: string) => void;
 }
 
 // ─── Message grouping ─────────────────────────────────────────
-const GROUP_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+const GROUP_THRESHOLD_MS = 5 * 60 * 1000;
 
 interface MessageGroup {
-  id:        string; // first message id
-  user:      string;
+  id:        string;
+  user:      string;   // stored handle (fallback only)
   userId:    string;
-  timestamp: string; // display timestamp of first message
-  isoTime:   string; // for grouping logic
+  timestamp: string;
+  isoTime:   string;
   messages:  ChatMessage[];
   type:      "message" | "system";
 }
@@ -38,24 +48,21 @@ function buildGroups(messages: ChatMessage[]): MessageGroup[] {
   for (const msg of messages) {
     if (msg.type === "system") {
       groups.push({
-        id:        msg.id,
-        user:      "SYSTEM",
-        userId:    "",
-        timestamp: msg.timestamp,
-        isoTime:   msg.timestamp,
-        messages:  [msg],
-        type:      "system",
+        id: msg.id, user: "SYSTEM", userId: "",
+        timestamp: msg.timestamp, isoTime: msg.timestamp,
+        messages: [msg], type: "system",
       });
       continue;
     }
 
-    const last = groups[groups.length - 1];
-    const msgTime = parseTimestamp(msg.timestamp);
-    const lastTime = last ? parseTimestamp(last.timestamp) : 0;
-    const sameUser = last && last.user === msg.user && last.type === "message";
-    const withinThreshold = sameUser && (msgTime - lastTime) < GROUP_THRESHOLD_MS;
+    const last         = groups[groups.length - 1];
+    const msgTime      = parseTimestamp(msg.timestamp);
+    const lastTime     = last ? parseTimestamp(last.timestamp) : 0;
+    // Group by userId (not stored handle) so renames don't break grouping
+    const sameUser     = last && last.userId === msg.userId && last.type === "message";
+    const withinWindow = sameUser && (msgTime - lastTime) < GROUP_THRESHOLD_MS;
 
-    if (withinThreshold) {
+    if (withinWindow) {
       last.messages.push(msg);
     } else {
       groups.push({
@@ -79,17 +86,9 @@ function parseTimestamp(ts: string): number {
   return (h * 3600 + m * 60 + (s || 0)) * 1000;
 }
 
-// HH:MM:SS → HH:MM
-function shortTime(ts: string): string {
-  return ts.slice(0, 5);
-}
+function shortTime(ts: string): string { return ts.slice(0, 5); }
 
-// Username initial
-function initial(name: string): string {
-  return (name?.[0] ?? "?").toUpperCase();
-}
-
-// Avatar color from username (deterministic)
+// ─── Avatar helpers ───────────────────────────────────────────
 const AVATAR_COLORS = [
   "bg-zk-green/20 text-zk-green border-zk-green/30",
   "bg-zk-cyan/15 text-zk-cyan border-zk-cyan/25",
@@ -100,6 +99,10 @@ const AVATAR_COLORS = [
 function avatarColor(name: string): string {
   const code = name.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
   return AVATAR_COLORS[code % AVATAR_COLORS.length];
+}
+
+function initial(name: string): string {
+  return (name?.[0] ?? "?").toUpperCase();
 }
 
 // ─── System message ───────────────────────────────────────────
@@ -116,37 +119,51 @@ function SystemLine({ msg }: { msg: ChatMessage }) {
 }
 
 // ─── Message group ────────────────────────────────────────────
+interface MessageGroupBlockProps {
+  group:        MessageGroup;
+  displayName:  string;   // resolved current name
+  canDelete:    boolean;
+  onDelete:     (id: string) => void;
+  isOwnGroup:   boolean;
+  onAvatarClick: (e: React.MouseEvent) => void;
+}
+
 function MessageGroupBlock({
-  group, canDelete, onDelete, isOwnGroup,
-}: {
-  group:       MessageGroup;
-  canDelete:   boolean;
-  onDelete:    (id: string) => void;
-  isOwnGroup:  boolean;
-}) {
-  const color = avatarColor(group.user);
+  group, displayName, canDelete, onDelete, isOwnGroup, onAvatarClick,
+}: MessageGroupBlockProps) {
+  const color = avatarColor(group.userId);  // userId is stable even after renames
 
   return (
     <div className="flex items-start gap-3 py-1 group/block">
-      {/* Avatar */}
-      <div className={cn(
-        "w-7 h-7 rounded-sm shrink-0 flex items-center justify-center mt-0.5",
-        "border text-[11px] font-mono font-bold select-none",
-        color,
-      )}>
-        {initial(group.user)}
-      </div>
+      {/* Clickable avatar */}
+      <button
+        onClick={onAvatarClick}
+        aria-label={`View ${displayName}'s profile`}
+        className={cn(
+          "w-7 h-7 rounded-sm shrink-0 flex items-center justify-center mt-0.5",
+          "border text-[11px] font-mono font-bold select-none",
+          "transition-opacity duration-100 hover:opacity-75 cursor-pointer",
+          color,
+        )}
+      >
+        {initial(displayName)}
+      </button>
 
       {/* Messages */}
       <div className="flex-1 min-w-0">
         {/* Header row */}
         <div className="flex items-baseline gap-2 mb-0.5">
-          <span className={cn(
-            "font-mono text-[12px] font-semibold",
-            isOwnGroup ? "text-zk-green" : "text-zk-white"
-          )}>
-            {group.user}
-          </span>
+          {/* Clickable username */}
+          <button
+            onClick={onAvatarClick}
+            className={cn(
+              "font-mono text-[12px] font-semibold leading-none cursor-pointer",
+              "hover:underline underline-offset-2 transition-opacity hover:opacity-80",
+              isOwnGroup ? "text-zk-green" : "text-zk-white"
+            )}
+          >
+            {displayName}
+          </button>
           <span className="font-mono text-[10px] text-zk-muted/40 select-none">
             {shortTime(group.timestamp)}
           </span>
@@ -156,26 +173,20 @@ function MessageGroupBlock({
         {group.messages.map((msg, i) => (
           <div
             key={msg.id}
-            className={cn(
-              "group/msg flex items-start gap-2",
-              i > 0 && "mt-0.5"
-            )}
+            className={cn("group/msg flex items-start gap-2", i > 0 && "mt-0.5")}
           >
             <span className={cn(
               "font-mono text-[12px] text-zk-white/90 leading-relaxed break-words min-w-0 flex-1",
-              msg.id.startsWith("opt-") && "opacity-50"
+              msg.id.startsWith("opt-") && "opacity-50",
             )}>
               {msg.text}
             </span>
 
-            {/* Per-message actions */}
+            {/* Per-message hover actions */}
             <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover/msg:opacity-100 transition-opacity duration-100">
-              {/* Precise timestamp on hover */}
               <span className="font-mono text-[9px] text-zk-muted/30 select-none">
                 {msg.timestamp}
               </span>
-
-              {/* Delete */}
               {canDelete && !msg.id.startsWith("opt-") && (
                 <button
                   onClick={() => onDelete(msg.id)}
@@ -207,7 +218,7 @@ function DateSeparator({ label }: { label: string }) {
 }
 
 // ─── Skeleton ─────────────────────────────────────────────────
-const SKELETON_ROWS: { lines: string[] }[] = [
+const SKELETON_ROWS = [
   { lines: ["w-2/3", "w-1/2"] },
   { lines: ["w-4/5"] },
   { lines: ["w-1/2", "w-3/4", "w-2/5"] },
@@ -223,20 +234,14 @@ function SkeletonLog() {
         <div className="h-2 w-8 rounded-sm bg-zk-border/20" />
         <div className="flex-1 h-px bg-zk-border/20" />
       </div>
-
       {SKELETON_ROWS.map((row, i) => (
         <div key={i} className="flex items-start gap-3 py-1">
-          {/* Avatar */}
           <div className="w-7 h-7 rounded-sm shrink-0 mt-0.5 bg-zk-border/25 border border-zk-border/20" />
-
           <div className="flex-1 min-w-0 space-y-1.5">
-            {/* Header: name + timestamp */}
             <div className="flex items-baseline gap-2">
               <div className="h-2.5 w-20 rounded-sm bg-zk-border/30" />
               <div className="h-2 w-8 rounded-sm bg-zk-border/20" />
             </div>
-
-            {/* Message lines */}
             {row.lines.map((w, j) => (
               <div key={j} className={cn("h-2.5 rounded-sm bg-zk-border/20", w)} />
             ))}
@@ -258,13 +263,24 @@ function dateLabel(isoDate: string): string {
   });
 }
 
+// ─── Popover state ────────────────────────────────────────────
+interface PopoverState {
+  userId:      string;
+  displayName: string;
+  username:    string;
+  x:           number;
+  y:           number;
+}
+
 // ─── Component ────────────────────────────────────────────────
 export function MessageLog({
   messages, canDelete, onDelete, currentUserId, loading,
+  userProfiles = {}, presence = {}, onOpenDm,
 }: MessageLogProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [popover, setPopover] = useState<PopoverState | null>(null);
 
-  // Produce a flat list of { kind: "separator" | "group" } items grouped by date
+  // Flat list of { separator | group } items grouped by date
   const items = useMemo(() => {
     type Item =
       | { kind: "separator"; date: string }
@@ -291,6 +307,21 @@ export function MessageLog({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
+  const handleAvatarClick = useCallback((
+    e: React.MouseEvent,
+    group: MessageGroup,
+  ) => {
+    e.stopPropagation();
+    const profile = userProfiles[group.userId];
+    setPopover({
+      userId:      group.userId,
+      displayName: profile?.displayName || group.user,
+      username:    profile?.username    || group.user,
+      x: e.clientX,
+      y: e.clientY,
+    });
+  }, [userProfiles]);
+
   if (loading) return <SkeletonLog />;
 
   if (messages.length === 0) {
@@ -305,27 +336,50 @@ export function MessageLog({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-2">
-      {items.map((item) => {
-        if (item.kind === "separator") {
-          return <DateSeparator key={`sep-${item.date}`} label={dateLabel(item.date)} />;
-        }
-        const { group } = item;
-        if (group.type === "system") {
-          return <SystemLine key={group.id} msg={group.messages[0]} />;
-        }
-        return (
-          <MessageGroupBlock
-            key={group.id}
-            group={group}
-            canDelete={canDelete}
-            onDelete={onDelete}
-            isOwnGroup={group.userId === currentUserId}
-          />
-        );
-      })}
+    <>
+      <div className="flex-1 overflow-y-auto px-4 py-2">
+        {items.map((item) => {
+          if (item.kind === "separator") {
+            return <DateSeparator key={`sep-${item.date}`} label={dateLabel(item.date)} />;
+          }
+          const { group } = item;
+          if (group.type === "system") {
+            return <SystemLine key={group.id} msg={group.messages[0]} />;
+          }
 
-      <div ref={bottomRef} />
-    </div>
+          // Resolve the current display name — fall back to stored handle
+          const profile     = userProfiles[group.userId];
+          const displayName = profile?.displayName || profile?.username || group.user;
+
+          return (
+            <MessageGroupBlock
+              key={group.id}
+              group={group}
+              displayName={displayName}
+              canDelete={canDelete}
+              onDelete={onDelete}
+              isOwnGroup={group.userId === currentUserId}
+              onAvatarClick={(e) => handleAvatarClick(e, group)}
+            />
+          );
+        })}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Profile popover */}
+      {popover && (
+        <UserProfileCard
+          userId={popover.userId}
+          displayName={popover.displayName}
+          username={popover.username}
+          isOnline={presence[popover.userId] === "ONLINE"}
+          isSelf={popover.userId === currentUserId}
+          anchorX={popover.x}
+          anchorY={popover.y}
+          onClose={() => setPopover(null)}
+          onOpenDm={onOpenDm}
+        />
+      )}
+    </>
   );
 }

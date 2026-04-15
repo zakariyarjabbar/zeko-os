@@ -1,7 +1,6 @@
 // app/login/page.tsx
 // Terminal-style login screen — email + password only.
-// No sign-up link; accounts are admin-generated.
-// On success → /system/overview via client-side router push.
+// On success → cinematic AuthTransition → /system/overview.
 
 "use client";
 
@@ -9,9 +8,10 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { GlassCard } from "@/components/ui/GlassCard";
-import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
+import { GlassCard }        from "@/components/ui/GlassCard";
+import { Button }           from "@/components/ui/Button";
+import { Badge }            from "@/components/ui/Badge";
+import { AuthTransition }   from "@/components/ui/AuthTransition";
 import { cn } from "@/lib/utils";
 
 // ─── Typing boot lines ────────────────────────────────────────
@@ -85,10 +85,11 @@ function TerminalField({
 // ─── Component ────────────────────────────────────────────────
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail]       = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError]       = useState<string | null>(null);
-  const [loading, setLoading]   = useState(false);
+  const [email, setEmail]           = useState("");
+  const [password, setPassword]     = useState("");
+  const [error, setError]           = useState<string | null>(null);
+  const [loading, setLoading]       = useState(false);
+  const [transitioning, setTransitioning] = useState(false);
 
   // Boot sequence display
   const [bootLines, setBootLines] = useState<string[]>([]);
@@ -131,8 +132,8 @@ export default function LoginPage() {
         return;
       }
 
-      // Redirect — hard push so the system layout does a fresh load
-      router.push("/system/overview");
+      // Fire cinematic transition — router.push happens inside onComplete
+      setTransitioning(true);
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -141,6 +142,13 @@ export default function LoginPage() {
   }
 
   return (
+    <>
+    {transitioning && (
+      <AuthTransition
+        mode="login"
+        onComplete={() => router.push("/system/overview")}
+      />
+    )}
     <main className="min-h-screen flex flex-col items-center justify-center px-4 relative overflow-hidden">
 
       {/* ── Background effects ───────────────────────────────── */}
@@ -272,5 +280,6 @@ export default function LoginPage() {
         </p>
       </div>
     </main>
+    </>
   );
 }
