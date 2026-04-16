@@ -11,13 +11,12 @@
 //   7.  Particle nodes  — drifting dots, cursor-attracted/repelled
 //   8.  Meteors         — bright streaks crossing the screen
 //   9.  Hex pulses      — expanding hexagon shockwaves from random points
-//  10.  Click ripples   — expanding ring on click
+//  10.  Explosions      — burst when 4+ nodes cluster within 30px
 //
 // Interactivity:
 //   Mouse 82–240px → gentle attraction
 //   Mouse  0– 82px → repulsion bubble
 //   Cursor proximity brightens nearby edges and nodes
-//   Click → ripple ring at cursor
 
 "use client";
 
@@ -29,6 +28,7 @@ interface Node {
   vx: number; vy: number;
   r: number; baseAlpha: number;
   phase: number; isCyan: boolean;
+  cooldown: number; boost: number;
 }
 interface Packet {
   fi: number; ti: number;
@@ -36,7 +36,6 @@ interface Packet {
   isCyan: boolean;
   trail: { x: number; y: number }[];
 }
-interface Ripple   { x: number; y: number; r: number; alpha: number; }
 interface MatChar  { x: number; y: number; char: string; speed: number; alpha: number; }
 interface AuroraBand {
   baseYFrac: number;   // 0–1 fraction of screen height
@@ -116,12 +115,12 @@ export function Background() {
       mx: -9999, my: -9999,
       nodes:      [] as Node[],
       packets:    [] as Packet[],
-      ripples:    [] as Ripple[],
       matrixChars:[] as MatChar[],
       aurora:     [] as AuroraBand[],
       meteors:    [] as Meteor[],
       arcs:       [] as Arc[],
       hexPulses:  [] as HexPulse[],
+      explosionFlashes: [] as { x: number; y: number; r: number; alpha: number }[],
       sweepY:     -120,
       sweepActive:false,
       raf: 0,
@@ -144,10 +143,12 @@ export function Background() {
         baseAlpha: Math.random() * 0.32 + 0.10,
         phase:     Math.random() * TAU,
         isCyan:    Math.random() < 0.12,
+        cooldown:  0,
+        boost:     0,
       }));
 
-      // Matrix chars — spaced every ~20px, clearly visible
-      const cols = Math.floor(W / 20);
+      // Matrix chars — spaced every ~40px, reduced density
+      const cols = Math.floor(W / 40);
       S.matrixChars = Array.from({ length: cols }, (_, i) => ({
         x:     (i / cols) * W + Math.random() * 16 - 8,
         y:     Math.random() * H,
@@ -174,20 +175,10 @@ export function Background() {
       if (e.touches[0]) { S.mx = e.touches[0].clientX; S.my = e.touches[0].clientY; }
     };
     const onLeave    = () => { S.mx = -9999; S.my = -9999; };
-    const onClick    = (e: MouseEvent) => {
-      S.ripples.push({ x: e.clientX, y: e.clientY, r: 6, alpha: 0.60 });
-    };
-    const onTouchEnd = (e: TouchEvent) => {
-      const t = e.changedTouches[0];
-      if (t) S.ripples.push({ x: t.clientX, y: t.clientY, r: 6, alpha: 0.60 });
-    };
-
     window.addEventListener("resize",     onResize);
     window.addEventListener("mousemove",  onMove);
     window.addEventListener("touchmove",  onTouch,    { passive: true });
     window.addEventListener("mouseleave", onLeave);
-    window.addEventListener("click",      onClick);
-    window.addEventListener("touchend",   onTouchEnd, { passive: true });
 
     // ── Packet spawner ─────────────────────────────────────────
     const MAX_D    = 158;
@@ -274,7 +265,7 @@ export function Background() {
     // ── Main render loop ───────────────────────────────────────
     function frame(ts: number) {
       S.raf = requestAnimationFrame(frame);
-      const { nodes, packets, ripples, matrixChars, aurora, meteors, arcs, hexPulses } = S;
+      const { nodes, packets, matrixChars, aurora, meteors, arcs, hexPulses } = S;
       const W = canvas!.width, H = canvas!.height;
       const t = ts * 0.001;
 
@@ -352,13 +343,49 @@ export function Background() {
           else         { const f = ((82 - md) / 82) * 0.42; n.vx += (dx / md) * f; n.vy += (dy / md) * f; }
         }
         n.vx *= 0.974; n.vy *= 0.974;
-        n.vx  = Math.max(-0.85, Math.min(0.85, n.vx));
-        n.vy  = Math.max(-0.85, Math.min(0.85, n.vy));
+        const maxV = n.boost > 0 ? 4.5 : 0.85;
+        if (n.boost > 0) n.boost--;
+        n.vx  = Math.max(-maxV, Math.min(maxV, n.vx));
+        n.vy  = Math.max(-maxV, Math.min(maxV, n.vy));
         n.x  += n.vx; n.y += n.vy;
         if (n.x < 0) { n.x = 0; n.vx =  Math.abs(n.vx); }
         if (n.x > W) { n.x = W; n.vx = -Math.abs(n.vx); }
         if (n.y < 0) { n.y = 0; n.vy =  Math.abs(n.vy); }
         if (n.y > H) { n.y = H; n.vy = -Math.abs(n.vy); }
+      }
+
+      // ── Cluster explosion detection ───────────────────────────
+      {
+        const CLUSTER_DIST = 30;
+        const CLUSTER_MIN  = 4;
+        const seen = new Set<number>();
+        for (let i = 0; i < nodes.length; i++) {
+          if (nodes[i].cooldown > 0) { nodes[i].cooldown--; continue; }
+          if (seen.has(i)) continue;
+          const group: number[] = [i];
+          for (let j = 0; j < nodes.length; j++) {
+            if (i === j || seen.has(j) || nodes[j].cooldown > 0) continue;
+            if (Math.hypot(nodes[i].x - nodes[j].x, nodes[i].y - nodes[j].y) < CLUSTER_DIST) {
+              group.push(j);
+            }
+          }
+          if (group.length >= CLUSTER_MIN) {
+            let cx = 0, cy = 0;
+            for (const idx of group) { cx += nodes[idx].x; cy += nodes[idx].y; }
+            cx /= group.length; cy /= group.length;
+            for (const idx of group) {
+              const dx = (nodes[idx].x - cx) || (Math.random() - 0.5) * 2;
+              const dy = (nodes[idx].y - cy) || (Math.random() - 0.5) * 2;
+              const d  = Math.hypot(dx, dy) || 1;
+              nodes[idx].vx += (dx / d) * 5.5;
+              nodes[idx].vy += (dy / d) * 5.5;
+              nodes[idx].cooldown = 220;
+              nodes[idx].boost    = 80;
+              seen.add(idx);
+            }
+            S.explosionFlashes.push({ x: cx, y: cy, r: 6, alpha: 1.0 });
+          }
+        }
       }
 
       for (let i = 0; i < nodes.length; i++) {
@@ -521,26 +548,31 @@ export function Background() {
         return h.alpha > 0;
       });
 
-      // ── 10. Click ripples ─────────────────────────────────
-      S.ripples = ripples.filter(rip => {
-        ctx!.beginPath(); ctx!.arc(rip.x, rip.y, rip.r, 0, TAU);
-        ctx!.strokeStyle = `rgba(0,255,65,${rip.alpha})`;
-        ctx!.lineWidth   = 1.3; ctx!.stroke();
+      // ── 10. Explosion flashes ─────────────────────────────────
+      S.explosionFlashes = S.explosionFlashes.filter(f => {
+        // Inner glow fill
+        const fl = ctx!.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r * 1.4);
+        fl.addColorStop(0,   `rgba(0,255,65,${f.alpha * 0.4})`);
+        fl.addColorStop(0.5, `rgba(0,212,255,${f.alpha * 0.18})`);
+        fl.addColorStop(1,   "rgba(0,255,65,0)");
+        ctx!.fillStyle = fl;
+        ctx!.fillRect(f.x - f.r * 1.4, f.y - f.r * 1.4, f.r * 2.8, f.r * 2.8);
 
-        if (rip.r > 30) {
-          ctx!.beginPath(); ctx!.arc(rip.x, rip.y, rip.r - 26, 0, TAU);
-          ctx!.strokeStyle = `rgba(0,212,255,${rip.alpha * 0.38})`;
-          ctx!.lineWidth   = 0.7; ctx!.stroke();
+        // Outer green ring
+        ctx!.beginPath(); ctx!.arc(f.x, f.y, f.r, 0, TAU);
+        ctx!.strokeStyle = `rgba(0,255,65,${f.alpha})`;
+        ctx!.lineWidth   = 2.2; ctx!.stroke();
+
+        // Trailing cyan ring
+        if (f.r > 18) {
+          ctx!.beginPath(); ctx!.arc(f.x, f.y, f.r * 0.62, 0, TAU);
+          ctx!.strokeStyle = `rgba(0,212,255,${f.alpha * 0.55})`;
+          ctx!.lineWidth   = 1; ctx!.stroke();
         }
-        if (rip.r < 28) {
-          const fl = ctx!.createRadialGradient(rip.x, rip.y, 0, rip.x, rip.y, 28);
-          fl.addColorStop(0, `rgba(0,255,65,${rip.alpha * 0.18})`);
-          fl.addColorStop(1, "rgba(0,255,65,0)");
-          ctx!.fillStyle = fl;
-          ctx!.fillRect(rip.x - 28, rip.y - 28, 56, 56);
-        }
-        rip.r += 3.8; rip.alpha -= 0.0085;
-        return rip.alpha > 0;
+
+        f.r     += 4.8;
+        f.alpha -= 0.024;
+        return f.alpha > 0;
       });
     }
 
@@ -560,8 +592,6 @@ export function Background() {
       window.removeEventListener("mousemove",  onMove);
       window.removeEventListener("touchmove",  onTouch);
       window.removeEventListener("mouseleave", onLeave);
-      window.removeEventListener("click",      onClick);
-      window.removeEventListener("touchend",   onTouchEnd);
     };
   }, []);
 

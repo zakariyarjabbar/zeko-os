@@ -7,7 +7,6 @@
 import { useState, useLayoutEffect } from "react";
 import { Background }         from "@/components/ui/Background";
 import { BootSequence }       from "@/components/ui/BootSequence";
-import { CursorTrail }        from "@/components/ui/CursorTrail";
 import { KonamiCode }         from "@/components/ui/KonamiCode";
 import { SystemHint }         from "@/components/ui/SystemHint";
 import { Navbar }             from "@/components/sections/Navbar";
@@ -60,7 +59,6 @@ export default function HomePage() {
       )}
 
       {/* ── Global interactive overlays ────────────────────── */}
-      <CursorTrail />
       <KonamiCode />
       <SystemHint />
 
