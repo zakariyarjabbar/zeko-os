@@ -19,6 +19,9 @@ const INBOX_FRESH_MS  = 60_000;
 /** Roles list stays fresh for 2 min — role structure changes rarely. */
 const ROLES_FRESH_MS  = 120_000;
 
+/** Permissions list stays fresh for 2 min — permissions change even less often. */
+const PERMS_FRESH_MS  = 120_000;
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 interface Stamped<T> {
@@ -36,6 +39,13 @@ export interface CachedInboxItem {
   created_at: string;
 }
 
+export interface CachedPermission {
+  id:          string;
+  name:        string;
+  description: string;
+  created_at:  string;
+}
+
 export interface CachedRole {
   id:          string;
   name:        string;
@@ -48,8 +58,9 @@ export interface CachedRole {
 // ── AppCacheStore ────────────────────────────────────────────────────────────
 
 class AppCacheStore {
-  private inbox: Stamped<CachedInboxItem[]> | null = null;
-  private roles: Stamped<CachedRole[]>      | null = null;
+  private inbox:  Stamped<CachedInboxItem[]>    | null = null;
+  private roles:  Stamped<CachedRole[]>          | null = null;
+  private perms:  Stamped<CachedPermission[]>    | null = null;
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -116,6 +127,25 @@ class AppCacheStore {
     if (this.roles) this.roles.fetchedAt = 0;
   }
 
+  // ── Permissions ───────────────────────────────────────────────────────────
+
+  getPermissions(): CachedPermission[] | null {
+    return this.perms?.data ?? null;
+  }
+
+  isPermissionsFresh(): boolean {
+    return !!this.perms && AppCacheStore.fresh(this.perms.fetchedAt, PERMS_FRESH_MS);
+  }
+
+  setPermissions(data: CachedPermission[]): void {
+    this.perms = { data, fetchedAt: AppCacheStore.now() };
+    this.persist("perms", data);
+  }
+
+  invalidatePermissions(): void {
+    if (this.perms) this.perms.fetchedAt = 0;
+  }
+
   // ── sessionStorage ────────────────────────────────────────────────────────
 
   private persist<T>(key: string, data: T): void {
@@ -157,6 +187,11 @@ class AppCacheStore {
     if (!this.roles) {
       const e = this.loadFromSession<CachedRole[]>("roles");
       if (e) this.roles = e;
+    }
+
+    if (!this.perms) {
+      const e = this.loadFromSession<CachedPermission[]>("perms");
+      if (e) this.perms = e;
     }
   }
 }

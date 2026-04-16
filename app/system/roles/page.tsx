@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getAppCache } from "@/lib/app-cache";
-import type { CachedRole } from "@/lib/app-cache";
+import type { CachedRole, CachedPermission } from "@/lib/app-cache";
 
 // ─── Types ────────────────────────────────────────────────────
 type Role = CachedRole;
@@ -119,12 +119,19 @@ function RolesTab({ permissions }: { permissions: Permission[] }) {
   }, []);
 
   useEffect(() => {
-    // Fetch only if cache is stale or empty
-    if (!getAppCache().isRolesFresh()) {
-      fetchRoles(!cachedRoles); // show spinner only on cold cache miss
-    }
+    // Stale-while-revalidate: show cached data instantly, always fetch fresh on mount.
+    // Spinner only if there was no cached data at all (cold open).
+    fetchRoles(cachedRoles === null);
+
+    // Pick up background refreshes triggered by ShellPrefetcher's 3-min interval.
+    const onCacheUpdate = () => {
+      const fresh = getAppCache().getRoles();
+      if (fresh) setRoles(fresh);
+    };
+    window.addEventListener("zk:cache:roles", onCacheUpdate);
+    return () => window.removeEventListener("zk:cache:roles", onCacheUpdate);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchRoles]);
+  }, []);
 
   async function selectRole(id: string) {
     setToast(null);
@@ -558,24 +565,45 @@ function blankPerm() {
 }
 
 function PermissionsTab() {
-  const [perms,    setPerms]    = useState<Permission[]>([]);
+  const cachedPermissions = getAppCache().getPermissions() as Permission[] | null;
+
+  const [perms,    setPerms]    = useState<Permission[]>(cachedPermissions ?? []);
   const [selected, setSelected] = useState<Permission | null>(null);
   const [mode,     setMode]     = useState<PermMode>(null);
   const [form,     setForm]     = useState(blankPerm());
-  const [loading,  setLoading]  = useState(true);
+  const [loading,  setLoading]  = useState(cachedPermissions === null);
   const [saving,   setSaving]   = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [toast,    setToast]    = useState<{ type: "ok" | "err"; msg: string } | null>(null);
 
-  const fetchPerms = useCallback(async () => {
-    setLoading(true);
+  // Returns the freshly-fetched list so callers can act on it without a second fetch.
+  const fetchPerms = useCallback(async (showSpinner = false): Promise<Permission[]> => {
+    if (showSpinner) setLoading(true);
     try {
       const res = await fetch("/api/permissions");
-      if (res.ok) setPerms(await res.json());
+      if (res.ok) {
+        const data = await res.json() as Permission[];
+        getAppCache().setPermissions(data as CachedPermission[]);
+        setPerms(data);
+        return data;
+      }
     } finally { setLoading(false); }
+    return [];
   }, []);
 
-  useEffect(() => { fetchPerms(); }, [fetchPerms]);
+  useEffect(() => {
+    // Stale-while-revalidate: show cached data instantly, always fetch fresh on mount.
+    fetchPerms(cachedPermissions === null);
+
+    // Pick up background refreshes triggered by ShellPrefetcher's 3-min interval.
+    const onCacheUpdate = () => {
+      const fresh = getAppCache().getPermissions() as Permission[] | null;
+      if (fresh) setPerms(fresh);
+    };
+    window.addEventListener("zk:cache:permissions", onCacheUpdate);
+    return () => window.removeEventListener("zk:cache:permissions", onCacheUpdate);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function openView(perm: Permission) {
     setSelected(perm);
@@ -621,8 +649,8 @@ function PermissionsTab() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         setToast({ type: "ok", msg: "Permission updated." });
-        await fetchPerms();
-        const fresh = (await (await fetch("/api/permissions")).json() as Permission[]).find((p) => p.id === selected.id);
+        const freshList = await fetchPerms();
+        const fresh = freshList.find((p) => p.id === selected.id);
         if (fresh) { setSelected(fresh); setMode("view"); }
       }
     } catch (e) {
@@ -923,14 +951,23 @@ function PermissionsTab() {
 // ─── Root page: IAM Control Panel ─────────────────────────────
 export default function IAMPage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("roles");
-  const [perms,     setPerms]     = useState<Permission[]>([]);
-  const [permsLoaded, setPermsLoaded] = useState(false);
 
-  // Fetch permissions once — shared between tabs
+  // Read from cache immediately — instant stats ribbon with no flash.
+  const cachedPagePerms = getAppCache().getPermissions() as Permission[] | null;
+  const [perms,       setPerms]       = useState<Permission[]>(cachedPagePerms ?? []);
+  const [permsLoaded, setPermsLoaded] = useState(cachedPagePerms !== null);
+
+  // Stale-while-revalidate: always revalidate in background on mount.
+  // Keeps the permission count in the stats ribbon current even if the cache
+  // was pre-warmed minutes ago before someone added/removed a permission.
   useEffect(() => {
     fetch("/api/permissions")
       .then((r) => r.ok ? r.json() : [])
-      .then((data: Permission[]) => { setPerms(data); setPermsLoaded(true); });
+      .then((data: Permission[]) => {
+        getAppCache().setPermissions(data as CachedPermission[]);
+        setPerms(data);
+        setPermsLoaded(true);
+      });
   }, []);
 
   const tabs: { id: ActiveTab; label: string; icon: React.ElementType }[] = [

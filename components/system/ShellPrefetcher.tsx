@@ -32,7 +32,7 @@ import { getAppCache }                 from "@/lib/app-cache";
 import { canViewInbox, isFounder }     from "@/lib/permissions";
 import { type Permission }             from "@/lib/types/permission";
 import type { Channel, DMConversation }        from "@/components/system/chat/types";
-import type { CachedInboxItem, CachedRole }    from "@/lib/app-cache";
+import type { CachedInboxItem, CachedRole, CachedPermission } from "@/lib/app-cache";
 
 // ── Fetch helpers ─────────────────────────────────────────────────────────────
 
@@ -76,7 +76,24 @@ async function prefetchRoles(): Promise<void> {
     const res = await fetch("/api/roles");
     if (!res.ok) return;
     const data = await res.json() as CachedRole[];
-    if (Array.isArray(data)) cache.setRoles(data);
+    if (Array.isArray(data)) {
+      cache.setRoles(data);
+      window.dispatchEvent(new CustomEvent("zk:cache:roles"));
+    }
+  } catch { /* silent */ }
+}
+
+async function prefetchPermissions(): Promise<void> {
+  const cache = getAppCache();
+  if (cache.isPermissionsFresh()) return;
+  try {
+    const res = await fetch("/api/permissions");
+    if (!res.ok) return;
+    const data = await res.json() as CachedPermission[];
+    if (Array.isArray(data)) {
+      cache.setPermissions(data);
+      window.dispatchEvent(new CustomEvent("zk:cache:permissions"));
+    }
   } catch { /* silent */ }
 }
 
@@ -160,8 +177,9 @@ export function ShellPrefetcher({ accessFlags }: ShellPrefetcherProps) {
       await Promise.allSettled([
         prefetchChannels(),
         prefetchDmConvos(),
-        canViewInbox(accessFlags) ? prefetchInbox() : Promise.resolve(),
-        isFounder(accessFlags)    ? prefetchRoles() : Promise.resolve(),
+        canViewInbox(accessFlags) ? prefetchInbox()       : Promise.resolve(),
+        isFounder(accessFlags)    ? prefetchRoles()       : Promise.resolve(),
+        isFounder(accessFlags)    ? prefetchPermissions() : Promise.resolve(),
       ]);
 
       if (closed) return;
@@ -204,11 +222,13 @@ export function ShellPrefetcher({ accessFlags }: ShellPrefetcherProps) {
         }, 90_000));
       }
 
-      // Roles (if admin): every 3 min
+      // Roles + Permissions (if admin): every 3 min
       if (isFounder(accessFlags)) {
         intervals.push(setInterval(() => {
           getAppCache().invalidateRoles();
+          getAppCache().invalidatePermissions();
           prefetchRoles().catch(() => { /* silent */ });
+          prefetchPermissions().catch(() => { /* silent */ });
         }, 180_000));
       }
     }
