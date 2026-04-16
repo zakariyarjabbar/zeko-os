@@ -116,15 +116,6 @@
     line-height: 1.6;
     overflow-x: hidden;
     min-height: 100vh;
-
-    /* Subtle dot-grid background texture */
-    background-image:
-      radial-gradient(
-        circle at 1px 1px,
-        rgba(0, 255, 65, 0.06) 1px,
-        transparent 0
-      );
-    background-size: 32px 32px;
   }
 }
 

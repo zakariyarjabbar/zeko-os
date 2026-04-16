@@ -1,12 +1,9 @@
 // components/sections/Hero.tsx
-// Hero section — glitch headline, HUD ring watermark, live terminal log panel,
-// animated system metrics, scanlines, perspective grid floor, corner brackets.
-
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Terminal, Activity } from "lucide-react";
+import { ArrowRight, Terminal } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 
@@ -29,12 +26,18 @@ const STATS = [
   { value: 12,    suffix: "ms", label: "Response"     },
 ] as const;
 
-const METRICS = [
-  { label: "CPU",     pct: 23 },
-  { label: "Memory",  pct: 67 },
-  { label: "Network", pct: 41 },
-  { label: "Disk",    pct: 18 },
-];
+// ─── Topology nodes & edges ───────────────────────────────────────
+const TOPO_NODES = [
+  { x: 200, y: 108, r: 19, label: "KERNEL",   letter: "K", cyan: false },
+  { x: 76,  y: 52,  r: 13, label: "SECURITY", letter: "S", cyan: true  },
+  { x: 324, y: 52,  r: 13, label: "NETWORK",  letter: "N", cyan: true  },
+  { x: 76,  y: 166, r: 13, label: "AUTH",     letter: "A", cyan: false },
+  { x: 324, y: 166, r: 13, label: "RUNTIME",  letter: "R", cyan: false },
+] as const;
+
+const TOPO_EDGES = [
+  [0, 1], [0, 2], [0, 3], [0, 4], [1, 2], [3, 4],
+] as const;
 
 // ─── Hooks ───────────────────────────────────────────────────────
 function useTyping(text: string, speed = 38, startDelay = 0) {
@@ -69,7 +72,6 @@ function useClock() {
   return clock;
 }
 
-// ─── Animated counter ────────────────────────────────────────────
 function Counter({ value, suffix = "", delay = 0 }: { value: number; suffix?: string; delay?: number }) {
   const [n, setN] = useState(0);
   useEffect(() => {
@@ -88,67 +90,180 @@ function Counter({ value, suffix = "", delay = 0 }: { value: number; suffix?: st
   return <>{value % 1 ? n.toFixed(2) : Math.floor(n)}{suffix}</>;
 }
 
-// ─── Decorative HUD ring (background watermark) ──────────────────
-function HudRingBg() {
-  const CX = 200, CY = 200, R = 148;
+// ─── Pre-computed dot grid for topology (400×218, 20px spacing) ──
+const TOPO_W = 400, TOPO_H = 218;
+const GRID_DOTS: { x: number; y: number }[] = [];
+for (let x = 18; x < TOPO_W; x += 20)
+  for (let y = 14; y < TOPO_H; y += 20)
+    GRID_DOTS.push({ x, y });
+
+// ─── Module Topology Canvas ───────────────────────────────────────
+function SystemTopology() {
+  const cvRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const cv = cvRef.current;
+    if (!cv) return;
+    const cx = cv.getContext("2d");
+    if (!cx) return;
+
+    const W = TOPO_W, H = TOPO_H;
+    cv.width = W; cv.height = H;
+
+    type Pkt = { ei: number; p: number; speed: number; rev: boolean };
+    const pkts: Pkt[] = [];
+
+    const spawnTimer = setInterval(() => {
+      if (pkts.length >= 10) return;
+      const ei = Math.floor(Math.random() * TOPO_EDGES.length);
+      pkts.push({ ei, p: 0, speed: 0.007 + Math.random() * 0.013, rev: Math.random() < 0.5 });
+    }, 500);
+
+    let raf = 0, t = 0;
+
+    function frame() {
+      raf = requestAnimationFrame(frame);
+      t += 0.016;
+      cx!.clearRect(0, 0, W, H);
+
+      // ── Dot grid (positions pre-computed at module load) ────
+      cx!.fillStyle = "rgba(0,255,65,0.028)";
+      for (const d of GRID_DOTS) {
+        cx!.beginPath(); cx!.arc(d.x, d.y, 0.65, 0, Math.PI * 2); cx!.fill();
+      }
+
+      // ── Edges ────────────────────────────────────────────────
+      for (const [ai, bi] of TOPO_EDGES) {
+        const na = TOPO_NODES[ai], nb = TOPO_NODES[bi];
+
+        // Outer glow line
+        cx!.beginPath(); cx!.moveTo(na.x, na.y); cx!.lineTo(nb.x, nb.y);
+        cx!.strokeStyle = "rgba(0,255,65,0.06)";
+        cx!.lineWidth = 4; cx!.setLineDash([]); cx!.stroke();
+
+        // Animated dashed core
+        cx!.beginPath(); cx!.moveTo(na.x, na.y); cx!.lineTo(nb.x, nb.y);
+        cx!.setLineDash([5, 9]);
+        cx!.lineDashOffset = -(t * 22);
+        cx!.strokeStyle = "rgba(0,255,65,0.13)";
+        cx!.lineWidth = 0.9; cx!.stroke();
+        cx!.setLineDash([]);
+      }
+
+      // ── Packets ──────────────────────────────────────────────
+      for (let i = pkts.length - 1; i >= 0; i--) {
+        const pkt = pkts[i];
+        const [ai, bi] = TOPO_EDGES[pkt.ei];
+        const na = TOPO_NODES[ai], nb = TOPO_NODES[bi];
+        const pp  = pkt.rev ? 1 - pkt.p : pkt.p;
+        const px  = na.x + (nb.x - na.x) * pp;
+        const py  = na.y + (nb.y - na.y) * pp;
+
+        // Trail
+        for (let k = 1; k <= 4; k++) {
+          const tp  = Math.max(0, pkt.rev ? 1 - (pkt.p - k * 0.018) : pkt.p - k * 0.018);
+          const tx  = na.x + (nb.x - na.x) * tp;
+          const ty  = na.y + (nb.y - na.y) * tp;
+          cx!.beginPath(); cx!.arc(tx, ty, 1.1, 0, Math.PI * 2);
+          cx!.fillStyle = `rgba(0,212,255,${0.14 - k * 0.03})`; cx!.fill();
+        }
+
+        // Glow halo
+        const g = cx!.createRadialGradient(px, py, 0, px, py, 6);
+        g.addColorStop(0, "rgba(0,212,255,0.92)");
+        g.addColorStop(1, "rgba(0,212,255,0)");
+        cx!.beginPath(); cx!.arc(px, py, 6, 0, Math.PI * 2);
+        cx!.fillStyle = g; cx!.fill();
+
+        // Core
+        cx!.beginPath(); cx!.arc(px, py, 1.6, 0, Math.PI * 2);
+        cx!.fillStyle = "rgba(0,212,255,1)"; cx!.fill();
+
+        pkt.p += pkt.speed;
+        if (pkt.p >= 1) pkts.splice(i, 1);
+      }
+
+      // ── Nodes — set shared ctx state once before the loop ────
+      cx!.textAlign    = "center";
+      cx!.textBaseline = "middle";
+      for (let i = 0; i < TOPO_NODES.length; i++) {
+        const n     = TOPO_NODES[i];
+        const pulse = Math.sin(t * 2.2 + i * 1.1) * 0.25 + 0.75;
+        const [r, g, b] = n.cyan ? [0, 212, 255] : [0, 255, 65];
+
+        // Outer soft pulse ring
+        const outerR = n.r + 4 + pulse * 5;
+        const rg = cx!.createRadialGradient(n.x, n.y, n.r + 1, n.x, n.y, outerR + 8);
+        rg.addColorStop(0, `rgba(${r},${g},${b},${0.15 * pulse})`);
+        rg.addColorStop(1, `rgba(${r},${g},${b},0)`);
+        cx!.beginPath(); cx!.arc(n.x, n.y, outerR + 8, 0, Math.PI * 2);
+        cx!.fillStyle = rg; cx!.fill();
+
+        // Fill
+        cx!.beginPath(); cx!.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+        cx!.fillStyle = "#060d06"; cx!.fill();
+
+        // Inner glow fill
+        const ig = cx!.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.r);
+        ig.addColorStop(0, `rgba(${r},${g},${b},${0.07 * pulse})`);
+        ig.addColorStop(1, `rgba(${r},${g},${b},0)`);
+        cx!.beginPath(); cx!.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+        cx!.fillStyle = ig; cx!.fill();
+
+        // Border ring
+        cx!.beginPath(); cx!.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+        cx!.strokeStyle = `rgba(${r},${g},${b},${0.45 + pulse * 0.35})`;
+        cx!.lineWidth   = 1; cx!.stroke();
+
+        // Letter
+        cx!.font      = `bold ${i === 0 ? 11 : 9}px "JetBrains Mono", monospace`;
+        cx!.fillStyle = `rgba(${r},${g},${b},${0.75 + pulse * 0.2})`;
+        cx!.fillText(n.letter, n.x, n.y);
+
+        // Label below
+        cx!.font      = `7px "JetBrains Mono", monospace`;
+        cx!.fillStyle = `rgba(${r},${g},${b},0.38)`;
+        cx!.fillText(n.label, n.x, n.y + n.r + 10);
+      }
+
+      // ── v1.0.0 sub-label under KERNEL ────────────────────────
+      cx!.font      = '6px "JetBrains Mono", monospace';
+      cx!.fillStyle = "rgba(0,255,65,0.22)";
+      // textAlign is still "center" from the node loop above
+      cx!.fillText("v1.0.0", TOPO_NODES[0].x, TOPO_NODES[0].y + TOPO_NODES[0].r + 19);
+    }
+
+    frame();
+    return () => { cancelAnimationFrame(raf); clearInterval(spawnTimer); };
+  }, []);
+
   return (
-    <svg viewBox="0 0 400 400" className="w-full h-full" aria-hidden="true">
-      {Array.from({ length: 72 }, (_, i) => {
-        const a = ((i / 72) * 360 - 90) * (Math.PI / 180);
-        const major = i % 6 === 0;
-        const r1 = R + 6, r2 = R + 6 + (major ? 12 : 5);
-        const f = (n: number) => Math.round(n * 1000) / 1000;
-        return (
-          <line key={i}
-            x1={f(CX + r1 * Math.cos(a))} y1={f(CY + r1 * Math.sin(a))}
-            x2={f(CX + r2 * Math.cos(a))} y2={f(CY + r2 * Math.sin(a))}
-            stroke={`rgba(0,255,65,${major ? 0.18 : 0.07})`}
-            strokeWidth={major ? 1 : 0.5}
-          />
-        );
-      })}
-      <circle cx={CX} cy={CY} r={R}      fill="none" stroke="rgba(0,255,65,0.08)" strokeWidth={1.5} />
-      <circle cx={CX} cy={CY} r={R - 26} fill="none" stroke="rgba(0,255,65,0.04)" strokeWidth={1} strokeDasharray="4 14" />
-      <circle cx={CX} cy={CY} r={R - 52} fill="none" stroke="rgba(0,255,65,0.03)" strokeWidth={1} strokeDasharray="2 18" />
-      {[
-        { x: CX,          y: CY - R - 22, t: "KERNEL",   a: "middle" as const },
-        { x: CX + R + 26, y: CY + 5,      t: "NETWORK",  a: "start"  as const },
-        { x: CX,          y: CY + R + 28, t: "RUNTIME",  a: "middle" as const },
-        { x: CX - R - 26, y: CY + 5,      t: "SECURITY", a: "end"    as const },
-      ].map(({ x, y, t, a }) => (
-        <text key={t} x={x} y={y} textAnchor={a}
-          fontFamily={`"JetBrains Mono", monospace`} fontSize={9} letterSpacing={2}
-          fill="rgba(0,255,65,0.1)"
-        >{t}</text>
-      ))}
-      <text x={CX} y={CY - 10} textAnchor="middle"
-        fontFamily={`"JetBrains Mono", monospace`} fontSize={28} fontWeight="bold"
-        fill="rgba(0,255,65,0.07)"
-      >Z://</text>
-      <text x={CX} y={CY + 10} textAnchor="middle"
-        fontFamily={`"JetBrains Mono", monospace`} fontSize={9} letterSpacing={4}
-        fill="rgba(0,255,65,0.05)"
-      >ZEKO OS</text>
-    </svg>
+    <canvas
+      ref={cvRef}
+      aria-hidden="true"
+      className="w-full block"
+      style={{ height: TOPO_H, willChange: "transform" }}
+      suppressHydrationWarning
+    />
   );
 }
 
 // ─── Framer Motion variants ───────────────────────────────────────
 const fadeUp = (delay: number) => ({
-  initial: { opacity: 0, y: 22 },
-  animate: { opacity: 1, y: 0 },
+  initial:    { opacity: 0, y: 20 },
+  animate:    { opacity: 1, y: 0  },
   transition: { duration: 0.65, delay, ease: [0.22, 1, 0.36, 1] as const },
 });
 const fadeIn = (delay: number) => ({
-  initial: { opacity: 0 },
-  animate: { opacity: 1 },
+  initial:    { opacity: 0 },
+  animate:    { opacity: 1 },
   transition: { duration: 0.55, delay },
 });
 
 // ─── Component ───────────────────────────────────────────────────
 export function Hero() {
-  const clock                      = useClock();
-  const [logIdx, setLogIdx]        = useState(0);
+  const clock                       = useClock();
+  const [logIdx, setLogIdx]         = useState(0);
   const { out: cmd, done: cmdDone } = useTyping("initialize --env=prod --arch=x86_64", 36, 700);
 
   useEffect(() => {
@@ -160,146 +275,114 @@ export function Hero() {
   return (
     <section id="hero" className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden pt-20 pb-16">
 
-      {/* ── Glitch CSS ──────────────────────────────────────────── */}
+      {/* ── Glitch keyframes ────────────────────────────────────── */}
       <style>{`
         @keyframes glitch-top {
           0%,82%,100% { clip-path:inset(0 0 96% 0); transform:translate(0,0); opacity:0; }
-          84%          { clip-path:inset(10% 0 78% 0); transform:translate(-3px,0) skew(-0.5deg); opacity:0.85; color:#00D4FF; }
-          87%          { clip-path:inset(42% 0 42% 0); transform:translate(2px,0);  opacity:0.7;  color:#00D4FF; }
-          90%          { clip-path:inset(70% 0 14% 0); transform:translate(-1px,0); opacity:0.6;  color:#00D4FF; }
-          92%          { clip-path:inset(0 0 96% 0);   transform:translate(0,0);   opacity:0; }
+          84%  { clip-path:inset(10% 0 78% 0); transform:translate(-3px,0) skew(-0.5deg); opacity:0.85; color:#00D4FF; }
+          87%  { clip-path:inset(42% 0 42% 0); transform:translate(2px,0);  opacity:0.7;  color:#00D4FF; }
+          90%  { clip-path:inset(70% 0 14% 0); transform:translate(-1px,0); opacity:0.6;  color:#00D4FF; }
+          92%  { clip-path:inset(0 0 96% 0);   transform:translate(0,0);   opacity:0; }
         }
         @keyframes glitch-bottom {
           0%,86%,100% { clip-path:inset(92% 0 0 0); transform:translate(0,0); opacity:0; }
-          88%          { clip-path:inset(75% 0 8% 0);  transform:translate(3px,0) skew(0.5deg); opacity:0.8; color:#FF3B3B; }
-          91%          { clip-path:inset(50% 0 32% 0); transform:translate(-2px,0); opacity:0.6; color:#FF3B3B; }
-          94%          { clip-path:inset(88% 0 0 0);   transform:translate(0,0);   opacity:0; }
+          88%  { clip-path:inset(75% 0 8% 0);  transform:translate(3px,0) skew(0.5deg); opacity:0.8; color:#FF3B3B; }
+          91%  { clip-path:inset(50% 0 32% 0); transform:translate(-2px,0); opacity:0.6; color:#FF3B3B; }
+          94%  { clip-path:inset(88% 0 0 0);   transform:translate(0,0); opacity:0; }
         }
         .glitch { position:relative; display:inline-block; }
         .glitch::before, .glitch::after {
-          content: attr(data-text);
-          position: absolute;
-          inset: 0;
-          font: inherit;
-          line-height: inherit;
-          letter-spacing: inherit;
-          white-space: nowrap;
-          pointer-events: none;
+          content:attr(data-text); position:absolute; inset:0;
+          font:inherit; line-height:inherit; letter-spacing:inherit;
+          white-space:nowrap; pointer-events:none;
         }
         .glitch::before { animation: glitch-top    4.5s infinite linear 1.5s; }
         .glitch::after  { animation: glitch-bottom 4.5s infinite linear 2.0s; }
       `}</style>
 
-      {/* ── Background layers ──────────────────────────────────── */}
-
-      {/* Dot grid */}
+      {/* ── Subtle radial glow ──────────────────────────────────── */}
       <div className="absolute inset-0 pointer-events-none" style={{
-        backgroundImage: "radial-gradient(circle at 1px 1px, rgba(0,255,65,0.04) 1px, transparent 0)",
-        backgroundSize:  "32px 32px",
+        background: "radial-gradient(ellipse 70% 55% at 30% 48%, rgba(0,255,65,0.03) 0%, transparent 70%)",
       }} />
-
-      {/* Scanlines */}
-      <div className="absolute inset-0 pointer-events-none" style={{
-        background: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.07) 3px, rgba(0,0,0,0.07) 4px)",
-      }} />
-
-      {/* Radial glows */}
-      <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-        <div className="w-[1100px] h-[700px] rounded-full bg-zk-green/[0.025] blur-[130px]" />
-      </div>
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/3 pointer-events-none">
-        <div className="w-[600px] h-[500px] rounded-full bg-zk-green/[0.04] blur-[90px]" />
-      </div>
-
-      {/* HUD ring watermark — large, centered, very faint */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
-        <div className="w-[700px] h-[700px] opacity-[0.55]">
-          <HudRingBg />
-        </div>
-      </div>
 
       {/* Perspective grid floor */}
-      <div className="absolute bottom-0 left-0 right-0 h-64 pointer-events-none" style={{
+      <div className="absolute bottom-0 left-0 right-0 h-56 pointer-events-none" style={{
         backgroundImage: `
-          linear-gradient(rgba(0,255,65,0.07) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(0,255,65,0.07) 1px, transparent 1px)
+          linear-gradient(rgba(0,255,65,0.06) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(0,255,65,0.06) 1px, transparent 1px)
         `,
-        backgroundSize:    "52px 26px",
-        transform:         "perspective(350px) rotateX(58deg)",
-        transformOrigin:   "bottom",
-        maskImage:         "linear-gradient(to top, rgba(0,0,0,0.25), transparent)",
-        WebkitMaskImage:   "linear-gradient(to top, rgba(0,0,0,0.25), transparent)",
+        backgroundSize:  "52px 26px",
+        transform:        "perspective(350px) rotateX(58deg)",
+        transformOrigin:  "bottom",
+        maskImage:        "linear-gradient(to top, rgba(0,0,0,0.18) 0%, transparent 100%)",
+        WebkitMaskImage:  "linear-gradient(to top, rgba(0,0,0,0.18) 0%, transparent 100%)",
       }} />
 
       {/* Corner HUD brackets */}
-      <div className="absolute top-[72px] left-5 w-5 h-5 border-t border-l border-zk-green/25 pointer-events-none" aria-hidden="true" />
-      <div className="absolute top-[72px] right-5 w-5 h-5 border-t border-r border-zk-green/25 pointer-events-none" aria-hidden="true" />
-      <div className="absolute bottom-5 left-5 w-5 h-5 border-b border-l border-zk-green/25 pointer-events-none" aria-hidden="true" />
-      <div className="absolute bottom-5 right-5 w-5 h-5 border-b border-r border-zk-green/25 pointer-events-none" aria-hidden="true" />
+      <div className="absolute top-[72px] left-5  w-4 h-4 border-t border-l border-zk-green/20 pointer-events-none" aria-hidden="true" />
+      <div className="absolute top-[72px] right-5 w-4 h-4 border-t border-r border-zk-green/20 pointer-events-none" aria-hidden="true" />
+      <div className="absolute bottom-5  left-5  w-4 h-4 border-b border-l border-zk-green/20 pointer-events-none" aria-hidden="true" />
+      <div className="absolute bottom-5  right-5 w-4 h-4 border-b border-r border-zk-green/20 pointer-events-none" aria-hidden="true" />
 
       {/* Top HUD strip */}
       <div className="absolute top-[78px] left-1/2 -translate-x-1/2 hidden sm:flex items-center gap-5 pointer-events-none select-none" aria-hidden="true">
-        <span className="font-mono text-[9px] text-zk-green/20 tracking-widest">SESSION:{clock}</span>
-        <span className="font-mono text-[9px] text-zk-green/12">·</span>
-        <span className="font-mono text-[9px] text-zk-green/20 tracking-widest">PID:0001</span>
-        <span className="font-mono text-[9px] text-zk-green/12">·</span>
-        <span className="font-mono text-[9px] text-zk-green/20 tracking-widest">ENV:PROD</span>
+        <span className="font-mono text-[9px] text-zk-green/22 tracking-widest">SESSION:{clock}</span>
+        <span className="font-mono text-[9px] text-zk-green/10">·</span>
+        <span className="font-mono text-[9px] text-zk-green/22 tracking-widest">PID:0001</span>
+        <span className="font-mono text-[9px] text-zk-green/10">·</span>
+        <span className="font-mono text-[9px] text-zk-green/22 tracking-widest">ENV:PROD</span>
       </div>
 
       {/* ── Main content ────────────────────────────────────────── */}
       <div className="relative z-10 w-full max-w-7xl mx-auto px-6">
-        <div className="grid lg:grid-cols-[1fr_420px] gap-14 xl:gap-20 items-center">
+        <div className="grid lg:grid-cols-[1fr_400px] gap-14 xl:gap-24 items-center">
 
-          {/* ── LEFT: Hero text ──────────────────────────────────── */}
+          {/* ── LEFT ─────────────────────────────────────────────── */}
           <div>
 
             {/* Command prompt */}
             <motion.div {...fadeIn(0.15)} className="font-mono text-sm mb-8 flex items-center gap-2">
-              <span className="text-zk-green/30 select-none">root@zeko-os:~$</span>
-              <span className="text-zk-green/65">{cmd}</span>
-              {!cmdDone && <span className="w-[7px] h-[14px] bg-zk-green/55 animate-cursor-blink inline-block" />}
+              <span className="text-zk-green/25 select-none">root@zeko-os:~$</span>
+              <span className="text-zk-green/60">{cmd}</span>
+              {!cmdDone && <span className="w-[7px] h-[13px] bg-zk-green/50 animate-cursor-blink inline-block" />}
             </motion.div>
 
             {/* Status badge */}
-            <motion.div {...fadeUp(0.3)} className="inline-flex items-center gap-2 mb-7 px-3 py-1.5 border border-zk-green/20 bg-zk-green/[0.04]">
-              <span className="w-1.5 h-1.5 rounded-full bg-zk-green animate-pulse" style={{ boxShadow: "0 0 6px rgba(0,255,65,0.8)" }} />
-              <span className="font-mono text-xs text-zk-green tracking-widest uppercase">System Online — v1.0.0</span>
+            <motion.div {...fadeUp(0.28)} className="inline-flex items-center gap-2 mb-8 px-3 py-1.5 border border-zk-green/18 bg-zk-green/[0.035]">
+              <span className="w-1.5 h-1.5 rounded-full bg-zk-green animate-pulse" style={{ boxShadow: "0 0 5px rgba(0,255,65,0.7)" }} />
+              <span className="font-mono text-xs text-zk-green/80 tracking-widest uppercase">System Online — v1.0.0</span>
             </motion.div>
 
-            {/* Giant glitch headline */}
-            <motion.h1 {...fadeUp(0.42)} className="font-bold tracking-tighter leading-[0.88] mb-7"
+            {/* Headline */}
+            <motion.h1 {...fadeUp(0.40)} className="font-bold tracking-tighter leading-[0.88] mb-8"
               style={{ fontSize: "clamp(3.8rem,9.5vw,8rem)" }}
             >
               <span
                 className="glitch block font-mono text-zk-green"
                 data-text="ZEKO"
-                style={{ textShadow: "0 0 25px rgba(0,255,65,0.55), 0 0 70px rgba(0,255,65,0.18), 0 0 120px rgba(0,255,65,0.06)" }}
+                style={{ textShadow: "0 0 30px rgba(0,255,65,0.50), 0 0 80px rgba(0,255,65,0.14)" }}
               >
                 ZEKO
               </span>
-              <span className="block text-zk-white/88">
-                OS
-                <span
-                  className="font-mono text-zk-green"
-                  style={{ textShadow: "0 0 25px rgba(0,255,65,0.75)" }}
-                >.</span>
+              <span className="block text-zk-white/85">
+                OS<span className="font-mono text-zk-green" style={{ textShadow: "0 0 20px rgba(0,255,65,0.65)" }}>.</span>
               </span>
             </motion.h1>
 
             {/* Sub-headline */}
-            <motion.p {...fadeUp(0.52)} className="max-w-xl text-lg sm:text-xl text-zk-slate leading-relaxed mb-4">
-              A precision-engineered digital environment built for engineers who demand{" "}
-              <span className="text-zk-white font-medium">performance, modularity,</span>{" "}
+            <motion.p {...fadeUp(0.50)} className="max-w-lg text-lg text-zk-slate/85 leading-relaxed mb-3">
+              A precision-engineered digital environment for engineers who demand{" "}
+              <span className="text-zk-white/90 font-medium">performance, modularity,</span>{" "}
               and <span className="text-zk-green font-mono">zero compromise.</span>
             </motion.p>
 
             {/* Meta line */}
-            <motion.p {...fadeIn(0.62)} className="font-mono text-xs text-zk-muted tracking-widest mb-10">
-              {">"} KERNEL=1.0.0 &nbsp;|&nbsp; ARCH=x86_64 &nbsp;|&nbsp; ENV=PRODUCTION &nbsp;|&nbsp; BUILD=stable
+            <motion.p {...fadeIn(0.60)} className="font-mono text-[11px] text-zk-muted/60 tracking-widest mb-10">
+              {">"} KERNEL=1.0.0 &nbsp;·&nbsp; ARCH=x86_64 &nbsp;·&nbsp; ENV=PRODUCTION &nbsp;·&nbsp; BUILD=stable
             </motion.p>
 
             {/* CTAs */}
-            <motion.div {...fadeUp(0.72)} className="flex flex-wrap items-center gap-4 mb-12">
+            <motion.div {...fadeUp(0.70)} className="flex flex-wrap items-center gap-4 mb-12">
               <Link href="/system/overview">
                 <Button variant="primary" size="lg" rightIcon={<ArrowRight size={16} />}>
                   Initialize System
@@ -311,17 +394,17 @@ export function Hero() {
             </motion.div>
 
             {/* Stats bar */}
-            <motion.div {...fadeIn(0.82)}
-              className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-zk-border border border-zk-border overflow-hidden"
+            <motion.div {...fadeIn(0.80)}
+              className="grid grid-cols-2 sm:grid-cols-4 border border-zk-green/12 divide-x divide-zk-green/12 overflow-hidden"
             >
               {STATS.map((s, i) => (
-                <div key={s.label} className="bg-zk-bg px-4 py-4 text-center hover:bg-zk-green/[0.04] transition-colors duration-200 group">
+                <div key={s.label} className="px-4 py-4 text-center hover:bg-zk-green/[0.035] transition-colors duration-300 group">
                   <div className="font-mono text-xl font-bold text-zk-green tabular-nums"
-                    style={{ textShadow: "0 0 12px rgba(0,255,65,0.45)" }}
+                    style={{ textShadow: "0 0 10px rgba(0,255,65,0.40)" }}
                   >
                     <Counter value={s.value} suffix={s.suffix} delay={1100 + i * 160} />
                   </div>
-                  <div className="font-mono text-[9px] text-zk-muted tracking-widest uppercase mt-1 group-hover:text-zk-slate transition-colors">
+                  <div className="font-mono text-[9px] text-zk-muted/60 tracking-widest uppercase mt-1 group-hover:text-zk-slate/70 transition-colors">
                     {s.label}
                   </div>
                 </div>
@@ -329,94 +412,95 @@ export function Hero() {
             </motion.div>
           </div>
 
-          {/* ── RIGHT: Terminal + Metrics ─────────────────────────── */}
+          {/* ── RIGHT: Terminal log + Module topology ─────────────── */}
           <motion.div
-            initial={{ opacity: 0, x: 28 }}
+            initial={{ opacity: 0, x: 24 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.7, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
-            className="hidden lg:flex flex-col gap-4"
+            className="hidden lg:flex flex-col gap-3"
           >
+
             {/* Terminal window */}
-            <div className="border border-zk-border bg-zk-bg/90 backdrop-blur-sm overflow-hidden"
-              style={{ boxShadow: "0 0 50px rgba(0,255,65,0.04), 0 0 1px rgba(0,255,65,0.12) inset" }}
-            >
-              {/* Title bar */}
-              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zk-border bg-zk-bg/50">
+            <div className="border border-zk-green/14 bg-[#060d06] overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zk-green/10 bg-black/30">
                 <div className="flex gap-1.5">
-                  <div className="w-2.5 h-2.5 rounded-full bg-red-500/50" />
-                  <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/50" />
-                  <div className="w-2.5 h-2.5 rounded-full bg-zk-green/50" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500/40" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/40" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-zk-green/40" />
                 </div>
-                <span className="font-mono text-[10px] text-zk-muted ml-2 tracking-wider">SYSTEM — boot.log</span>
+                <span className="font-mono text-[10px] text-zk-muted/55 ml-2 tracking-wider">SYSTEM — boot.log</span>
                 <div className="ml-auto flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-zk-green animate-pulse" style={{ boxShadow: "0 0 5px rgba(0,255,65,0.7)" }} />
-                  <span className="font-mono text-[9px] text-zk-green/55 tracking-widest">LIVE</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-zk-green animate-pulse" style={{ boxShadow: "0 0 4px rgba(0,255,65,0.65)" }} />
+                  <span className="font-mono text-[9px] text-zk-green/45 tracking-widest">LIVE</span>
                 </div>
               </div>
 
-              {/* Log content */}
-              <div className="p-4 space-y-1.5 min-h-[252px]">
+              <div className="p-4 space-y-1.5 min-h-[200px]">
                 {BOOT_LOGS.slice(0, logIdx).map((log, i) => (
                   <motion.div key={i}
-                    initial={{ opacity: 0, x: -8 }}
+                    initial={{ opacity: 0, x: -6 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.14 }}
+                    transition={{ duration: 0.13 }}
                     className="flex items-center gap-3 font-mono text-[11px]"
                   >
-                    <span className="text-zk-muted/35 flex-shrink-0 tabular-nums">[{String(i + 1).padStart(2, "0")}]</span>
-                    <span className="text-zk-slate flex-1 truncate">{log}</span>
-                    <span className="text-zk-green/65 flex-shrink-0 text-[10px]">OK</span>
+                    <span className="text-zk-muted/30 flex-shrink-0 tabular-nums">[{String(i + 1).padStart(2, "0")}]</span>
+                    <span className="text-zk-slate/75 flex-1 truncate">{log}</span>
+                    <span className="text-zk-green/55 flex-shrink-0 text-[10px]">OK</span>
                   </motion.div>
                 ))}
                 {logIdx < BOOT_LOGS.length && (
                   <div className="flex items-center gap-3 font-mono text-[11px]">
-                    <span className="text-zk-muted/35">[{String(logIdx + 1).padStart(2, "0")}]</span>
-                    <span className="text-zk-green/45 animate-pulse">processing...</span>
+                    <span className="text-zk-muted/30">[{String(logIdx + 1).padStart(2, "0")}]</span>
+                    <span className="text-zk-green/40 animate-pulse">processing...</span>
                   </div>
                 )}
                 {logIdx >= BOOT_LOGS.length && (
                   <motion.div
                     initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
-                    className="flex items-center gap-2 font-mono text-[11px] mt-3 pt-3 border-t border-zk-border/60"
+                    className="flex items-center gap-2 font-mono text-[11px] mt-3 pt-3 border-t border-zk-green/8"
                   >
-                    <span className="text-zk-green/35 select-none">root@zeko-os:~$</span>
-                    <span className="text-zk-green/70 animate-cursor-blink">_</span>
+                    <span className="text-zk-green/30 select-none">root@zeko-os:~$</span>
+                    <span className="text-zk-green/60 animate-cursor-blink">_</span>
                   </motion.div>
                 )}
               </div>
             </div>
 
-            {/* System metrics */}
-            <div className="border border-zk-border bg-zk-bg/90 backdrop-blur-sm p-4"
-              style={{ boxShadow: "0 0 50px rgba(0,255,65,0.03)" }}
-            >
-              <div className="flex items-center justify-between mb-4">
+            {/* Module Topology */}
+            <div className="border border-zk-green/14 bg-[#060d06] overflow-hidden">
+              {/* Title bar */}
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-zk-green/10 bg-black/30">
                 <div className="flex items-center gap-2">
-                  <Activity size={11} className="text-zk-green/55" />
-                  <span className="font-mono text-[10px] text-zk-muted tracking-widest uppercase">System Metrics</span>
-                </div>
-                <span className="font-mono text-[9px] text-zk-green/30 tabular-nums">{clock}</span>
-              </div>
-              <div className="space-y-3">
-                {METRICS.map((m, i) => (
-                  <div key={m.label}>
-                    <div className="flex justify-between mb-1">
-                      <span className="font-mono text-[9px] text-zk-muted uppercase tracking-widest">{m.label}</span>
-                      <span className="font-mono text-[9px] text-zk-green/65 tabular-nums">{m.pct}%</span>
-                    </div>
-                    <div className="h-px bg-zk-border overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${m.pct}%` }}
-                        transition={{ duration: 1.1, delay: 0.9 + i * 0.1, ease: "easeOut" }}
-                        className="h-full bg-zk-green"
-                        style={{ boxShadow: "2px 0 8px rgba(0,255,65,0.6)" }}
-                      />
-                    </div>
+                  <div className="flex gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-zk-green/35 animate-pulse" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-zk-cyan/35 animate-pulse" style={{ animationDelay: "0.4s" }} />
                   </div>
-                ))}
+                  <span className="font-mono text-[10px] text-zk-muted/55 tracking-wider">MODULE TOPOLOGY</span>
+                </div>
+                <span className="font-mono text-[9px] text-zk-green/30 tracking-widest">5 NODES ACTIVE</span>
+              </div>
+
+              {/* Canvas */}
+              <div className="px-2 pt-1 pb-2">
+                <SystemTopology />
+              </div>
+
+              {/* Footer strip */}
+              <div className="px-4 pb-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-1 h-1 rounded-full bg-zk-green/50" />
+                    <span className="font-mono text-[8px] text-zk-muted/40 tracking-wider">KERNEL</span>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-1 h-1 rounded-full bg-zk-cyan/50" />
+                    <span className="font-mono text-[8px] text-zk-muted/40 tracking-wider">MODULE</span>
+                  </span>
+                </div>
+                <span className="font-mono text-[8px] text-zk-green/22 tracking-widest">LATENCY: 0.4ms</span>
               </div>
             </div>
+
           </motion.div>
 
         </div>

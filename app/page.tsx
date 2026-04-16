@@ -5,6 +5,7 @@
 "use client";
 
 import { useState, useLayoutEffect } from "react";
+import { Background }         from "@/components/ui/Background";
 import { BootSequence }       from "@/components/ui/BootSequence";
 import { CursorTrail }        from "@/components/ui/CursorTrail";
 import { KonamiCode }         from "@/components/ui/KonamiCode";
@@ -38,45 +39,49 @@ export default function HomePage() {
 
   return (
     <>
-      {/* Black cover on first cycle — prevents flash before useLayoutEffect runs */}
+      {/* ── z-0: Full-screen interactive canvas background ── */}
+      <Background />
+
+      {/* ── z-1: Edge vignette — darkens corners/edges ────── */}
+      <div
+        aria-hidden="true"
+        className="fixed inset-0 z-[1] pointer-events-none"
+        style={{
+          background: [
+            "radial-gradient(ellipse 90% 80% at 50% 42%, transparent 45%, rgba(5,5,5,0.55) 100%)",
+            "linear-gradient(to bottom, rgba(5,5,5,0.35) 0%, transparent 8%, transparent 88%, rgba(5,5,5,0.55) 100%)",
+          ].join(", "),
+        }}
+      />
+
+      {/* ── Black cover on first cycle — no flash ─────────── */}
       {!ready && (
         <div className="fixed inset-0 z-[9999] bg-black" aria-hidden="true" />
       )}
 
-      {/* Global interactive overlays */}
+      {/* ── Global interactive overlays ────────────────────── */}
       <CursorTrail />
       <KonamiCode />
       <SystemHint />
 
-      {/* Boot overlay */}
+      {/* ── Boot overlay ───────────────────────────────────── */}
       {isBooting && <BootSequence onComplete={handleBootComplete} />}
 
-      {/* Fixed navigation bar */}
-      <Navbar />
+      {/* ── All visible page content at z-[2] ─────────────── */}
+      <div className="relative z-[2]">
+        <Navbar />
 
-      {/* Main content */}
-      <main>
-        {/* 1. Hero — headline, stats, CTAs */}
-        <Hero />
+        <main>
+          <Hero />
+          <TerminalPlayground />
+          <LiveMonitor />
+          <Features />
+          <CodeShowcase />
+          <Contact />
+        </main>
 
-        {/* 2. Interactive terminal shell */}
-        <TerminalPlayground />
-
-        {/* 3. Live system monitor — real-time metrics + process table */}
-        <LiveMonitor />
-
-        {/* 4. Features — System Modules grid */}
-        <Features />
-
-        {/* 5. Code Showcase — terminal window + value props */}
-        <CodeShowcase />
-
-        {/* 6. Contact — CLI-style form */}
-        <Contact />
-      </main>
-
-      {/* Footer */}
-      <Footer />
+        <Footer />
+      </div>
     </>
   );
 }

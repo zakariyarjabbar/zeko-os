@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { Activity, Cpu, HardDrive, Wifi } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -118,7 +118,8 @@ function Sparkline({ values, hi }: { values: number[]; hi: number }) {
 }
 
 // ─── Metric Card ─────────────────────────────────────────────
-function MetricCard({ cfg, state }: { cfg: MetricCfg; state: MetricState }) {
+// memo: only re-renders when cfg or state reference actually changes
+const MetricCard = memo(function MetricCard({ cfg, state }: { cfg: MetricCfg; state: MetricState }) {
   const [hovered, setHovered] = useState(false);
   const pct      = (state.current / cfg.hi) * 100;
   const Icon     = cfg.icon;
@@ -186,7 +187,7 @@ function MetricCard({ cfg, state }: { cfg: MetricCfg; state: MetricState }) {
       )}
     </div>
   );
-}
+});
 
 // ─── Live clock ───────────────────────────────────────────────
 function LiveClock() {
