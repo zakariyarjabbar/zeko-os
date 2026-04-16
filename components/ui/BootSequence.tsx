@@ -1,14 +1,13 @@
 // components/ui/BootSequence.tsx
-// Full-screen BIOS/terminal boot animation.
-// Sequence: cursor → title typing → log stream → progress bar → SYSTEM READY → fade out.
-// Calls onComplete() when the overlay finishes so the parent can unmount it.
+// Reworked: Circular HUD ring boot animation.
+// Phases: cursor → init → log stream → final fill → SYSTEM READY → fade out.
+// Ring progress fills clockwise, quadrant labels light up at 25% intervals.
 
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
-// ─── Log lines ────────────────────────────────────────────────
 const LOG_LINES = [
   "Initializing hardware abstraction layer......... OK",
   "Mounting encrypted volumes...................... OK",
@@ -24,102 +23,258 @@ const LOG_LINES = [
   "All systems nominal............................. OK",
 ];
 
-// ─── ASCII progress bar ───────────────────────────────────────
-function ProgressBar({ pct }: { pct: number }) {
-  const WIDTH = 40;
-  const filled = Math.round((pct / 100) * WIDTH);
-  const empty  = WIDTH - filled;
-  const bar    = "█".repeat(filled) + "░".repeat(empty);
-  const label  = String(pct).padStart(3, " ");
+// ─── Ring geometry (all inside a 440×320 SVG viewBox) ─────────
+const CX   = 220;
+const CY   = 160;
+const R    = 108;
+const CIRC = 2 * Math.PI * R; // ≈ 678.6
+
+type Phase = "cursor" | "typing" | "logs" | "progress" | "ready" | "fadeout";
+
+// ─── Quadrant label rendered inside the SVG ───────────────────
+function QuadLabel({
+  x, y, text, lit, anchor = "middle",
+}: {
+  x: number; y: number; text: string; lit: boolean;
+  anchor?: "start" | "middle" | "end";
+}) {
   return (
-    <span className="font-mono text-xs text-zk-green whitespace-pre">
-      {"["}
-      {bar}
-      {"] "}
-      {label}
-      {"%"}
-    </span>
+    <text
+      x={x}
+      y={y}
+      textAnchor={anchor}
+      fontFamily={`"JetBrains Mono", "Fira Code", monospace`}
+      fontSize={9}
+      letterSpacing={2}
+      fill={lit ? "rgba(0,255,65,0.72)" : "rgba(0,255,65,0.14)"}
+      style={{
+        filter: lit ? "drop-shadow(0 0 5px rgba(0,255,65,0.5))" : "none",
+        transition: "fill 0.4s ease, filter 0.4s ease",
+        textTransform: "uppercase",
+      }}
+    >
+      {text}
+    </text>
   );
 }
 
-// ─── Props ────────────────────────────────────────────────────
+// ─── Circular HUD ring (pure SVG, responsive via viewBox) ─────
+function HudRing({
+  progress, phase, readyFlash,
+}: {
+  progress: number;
+  phase: Phase;
+  readyFlash: boolean;
+}) {
+  const dashOffset = CIRC * (1 - progress / 100);
+  const isReady    = phase === "ready";
+  const showPct    = ["logs", "progress", "ready"].includes(phase) && progress > 0;
+
+  // Orbiting dot at arc tip
+  const tipAngle = ((progress / 100) * 360 - 90) * (Math.PI / 180);
+  const tipX     = CX + R * Math.cos(tipAngle);
+  const tipY     = CY + R * Math.sin(tipAngle);
+  const showTip  = progress > 1 && progress < 99;
+
+  const statusWord =
+    phase === "cursor"   ? "STANDBY"  :
+    phase === "typing"   ? "INIT"     :
+    phase === "logs"     ? "LOADING"  :
+    phase === "progress" ? "RUNTIME"  :
+                           "READY";
+
+  return (
+    <svg
+      viewBox="0 0 440 320"
+      width="100%"
+      style={{ maxWidth: 440, overflow: "visible" }}
+      aria-hidden="true"
+    >
+      {/* ── 60 tick marks ──────────────────────────────────── */}
+      {Array.from({ length: 60 }, (_, i) => {
+        const a     = ((i / 60) * 360 - 90) * (Math.PI / 180);
+        const major = i % 5 === 0;
+        const r1    = R + 6;
+        const r2    = R + 6 + (major ? 8 : 4);
+        return (
+          <line
+            key={i}
+            x1={CX + r1 * Math.cos(a)} y1={CY + r1 * Math.sin(a)}
+            x2={CX + r2 * Math.cos(a)} y2={CY + r2 * Math.sin(a)}
+            stroke={`rgba(0,255,65,${major ? 0.22 : 0.08})`}
+            strokeWidth={major ? 1 : 0.5}
+          />
+        );
+      })}
+
+      {/* ── Track ring ─────────────────────────────────────── */}
+      <circle
+        cx={CX} cy={CY} r={R}
+        fill="none"
+        stroke="rgba(0,255,65,0.07)"
+        strokeWidth={1.5}
+      />
+
+      {/* ── Progress arc ───────────────────────────────────── */}
+      <circle
+        cx={CX} cy={CY} r={R}
+        fill="none"
+        stroke="#00FF41"
+        strokeWidth={isReady ? 2.5 : 1.8}
+        strokeLinecap="round"
+        strokeDasharray={CIRC}
+        strokeDashoffset={dashOffset}
+        transform={`rotate(-90 ${CX} ${CY})`}
+        style={{
+          transition: "stroke-dashoffset 0.06s linear",
+          filter: `drop-shadow(0 0 ${isReady && readyFlash ? "14px" : "4px"} rgba(0,255,65,${isReady && readyFlash ? "0.9" : "0.5"}))`,
+        }}
+      />
+
+      {/* ── Inner decorative dashed ring ───────────────────── */}
+      <circle
+        cx={CX} cy={CY} r={R - 22}
+        fill="none"
+        stroke="rgba(0,255,65,0.05)"
+        strokeWidth={1}
+        strokeDasharray="3 10"
+      />
+
+      {/* ── Orbiting dot at arc tip ─────────────────────────── */}
+      {showTip && (
+        <circle
+          cx={tipX} cy={tipY} r={4}
+          fill="#00FF41"
+          style={{ filter: "drop-shadow(0 0 7px rgba(0,255,65,0.95))" }}
+        />
+      )}
+
+      {/* ── Cursor-phase: pulsing center dot ───────────────── */}
+      {phase === "cursor" && (
+        <motion.circle
+          cx={CX} cy={CY} r={6}
+          fill="#00FF41"
+          animate={{ opacity: [1, 0.12] }}
+          transition={{ duration: 0.85, repeat: Infinity, repeatType: "reverse" }}
+          style={{ filter: "drop-shadow(0 0 8px rgba(0,255,65,0.8))" }}
+        />
+      )}
+
+      {/* ── Center: Z:// logo ──────────────────────────────── */}
+      {phase !== "cursor" && (
+        <text
+          x={CX} y={CY - 14}
+          textAnchor="middle"
+          fontFamily={`"JetBrains Mono", "Fira Code", monospace`}
+          fontSize={20}
+          fontWeight="bold"
+          fill={isReady && readyFlash ? "#00FF41" : "rgba(0,255,65,0.88)"}
+          style={{
+            filter: isReady && readyFlash
+              ? "drop-shadow(0 0 14px rgba(0,255,65,1))"
+              : "drop-shadow(0 0 5px rgba(0,255,65,0.35))",
+          }}
+        >
+          Z://
+        </text>
+      )}
+
+      {/* ── Center: status word ────────────────────────────── */}
+      {phase !== "cursor" && (
+        <text
+          x={CX} y={CY + 6}
+          textAnchor="middle"
+          fontFamily={`"JetBrains Mono", "Fira Code", monospace`}
+          fontSize={9}
+          fill="rgba(107,122,107,0.75)"
+          letterSpacing={2}
+        >
+          {statusWord}
+        </text>
+      )}
+
+      {/* ── Center: percentage ─────────────────────────────── */}
+      {showPct && (
+        <text
+          x={CX} y={CY + 36}
+          textAnchor="middle"
+          fontFamily={`"JetBrains Mono", "Fira Code", monospace`}
+          fontSize={28}
+          fontWeight="bold"
+          fill={isReady && readyFlash ? "#00FF41" : "rgba(0,255,65,0.8)"}
+          style={{
+            filter: isReady && readyFlash
+              ? "drop-shadow(0 0 16px rgba(0,255,65,0.95))"
+              : "none",
+          }}
+        >
+          {Math.round(progress)}%
+        </text>
+      )}
+
+      {/* ── Quadrant labels (light up at 1 / 25 / 50 / 75%) ─ */}
+      <QuadLabel x={CX}          y={CY - R - 18} text="KERNEL"   lit={progress >= 1}  anchor="middle" />
+      <QuadLabel x={CX + R + 22} y={CY + 4}      text="NETWORK"  lit={progress >= 25} anchor="start"  />
+      <QuadLabel x={CX}          y={CY + R + 24} text="RUNTIME"  lit={progress >= 50} anchor="middle" />
+      <QuadLabel x={CX - R - 22} y={CY + 4}      text="SECURITY" lit={progress >= 75} anchor="end"    />
+    </svg>
+  );
+}
+
+// ─── Component ────────────────────────────────────────────────
 interface BootSequenceProps {
   onComplete: () => void;
 }
 
-// ─── Phases ───────────────────────────────────────────────────
-type Phase =
-  | "cursor"       // blinking cursor only
-  | "typing"       // typing the title line
-  | "logs"         // streaming log lines
-  | "progress"     // filling progress bar
-  | "ready"        // SYSTEM READY flash
-  | "fadeout";     // opacity fade → unmount
-
-// ─── Component ────────────────────────────────────────────────
 export function BootSequence({ onComplete }: BootSequenceProps) {
-  const [phase, setPhase]           = useState<Phase>("cursor");
-  const [titleText, setTitleText]   = useState("");
+  const [phase,       setPhase]       = useState<Phase>("cursor");
+  const [progress,    setProgress]    = useState(0);
   const [visibleLogs, setVisibleLogs] = useState<string[]>([]);
-  const [progress, setProgress]     = useState(0);
-  const [readyFlash, setReadyFlash] = useState(false);
-  const [showCursor, setShowCursor] = useState(true);
+  const [readyFlash,  setReadyFlash]  = useState(false);
 
-  const logRef = useRef<HTMLDivElement>(null);
-
-  // Auto-scroll log area as lines appear
-  useEffect(() => {
-    if (logRef.current) {
-      logRef.current.scrollTop = logRef.current.scrollHeight;
-    }
-  }, [visibleLogs]);
-
-  // ── Master sequence ─────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
-    const delay = (ms: number) =>
-      new Promise<void>((res) => setTimeout(res, ms));
+    const delay = (ms: number) => new Promise<void>(res => setTimeout(res, ms));
 
     async function run() {
-      // Phase 1: blinking cursor — 900ms
-      await delay(900);
+      // ① Cursor pause — 600ms
+      await delay(600);
       if (cancelled) return;
 
-      // Phase 2: type the title
+      // ② Init phase — ring 0 → 8%
       setPhase("typing");
-      const TITLE = "ZEKO OS v1.0.0  —  INITIALIZATION SEQUENCE";
-      for (let i = 1; i <= TITLE.length; i++) {
+      for (let i = 1; i <= 8; i++) {
         if (cancelled) return;
-        setTitleText(TITLE.slice(0, i));
-        await delay(38);
+        setProgress(i);
+        await delay(50);
       }
-      await delay(300);
+      await delay(180);
       if (cancelled) return;
 
-      // Phase 3: stream log lines
+      // ③ Log stream — ring 8 → 68%
       setPhase("logs");
-      for (const line of LOG_LINES) {
+      const step = (68 - 8) / LOG_LINES.length; // 5% per line
+      for (let i = 0; i < LOG_LINES.length; i++) {
         if (cancelled) return;
-        setVisibleLogs((prev) => [...prev, line]);
-        await delay(110);
+        setVisibleLogs(prev => [...prev, LOG_LINES[i]]);
+        setProgress(Math.round(8 + (i + 1) * step));
+        await delay(100);
+      }
+      await delay(150);
+      if (cancelled) return;
+
+      // ④ Final fill — ring 68 → 100%
+      setPhase("progress");
+      for (let p = 69; p <= 100; p++) {
+        if (cancelled) return;
+        setProgress(p);
+        await delay(22);
       }
       await delay(200);
       if (cancelled) return;
 
-      // Phase 4: progress bar
-      setPhase("progress");
-      for (let p = 0; p <= 100; p += 2) {
-        if (cancelled) return;
-        setProgress(p);
-        await delay(28);
-      }
-      setProgress(100);
-      await delay(300);
-      if (cancelled) return;
-
-      // Phase 5: SYSTEM READY flash
+      // ⑤ SYSTEM READY flash (3 blinks)
       setPhase("ready");
-      setShowCursor(false);
       for (let i = 0; i < 3; i++) {
         if (cancelled) return;
         setReadyFlash(true);
@@ -131,7 +286,7 @@ export function BootSequence({ onComplete }: BootSequenceProps) {
       await delay(500);
       if (cancelled) return;
 
-      // Phase 6: fade out
+      // ⑥ Fade out
       setPhase("fadeout");
     }
 
@@ -147,94 +302,73 @@ export function BootSequence({ onComplete }: BootSequenceProps) {
           initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.7, ease: "easeInOut" }}
-          className="fixed inset-0 z-[9999] flex flex-col items-start justify-center bg-black px-8 sm:px-16 md:px-24 overflow-hidden"
-          // Slight scanline texture
+          className="fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden"
           style={{
+            background: "#050505",
             backgroundImage:
-              "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,65,0.015) 2px, rgba(0,255,65,0.015) 4px)",
+              "radial-gradient(circle at 1px 1px, rgba(0,255,65,0.045) 1px, transparent 0)",
+            backgroundSize: "32px 32px",
           }}
         >
-          {/* ── Corner labels ──────────────────────────────── */}
-          <span className="absolute top-4 left-6 font-mono text-[10px] text-zk-green/30 tracking-widest select-none">
+          {/* ── Corner labels ───────────────────────────────── */}
+          <span className="absolute top-4 left-6 font-mono text-[10px] text-zk-green/25 tracking-widest select-none">
             ZEKO_BIOS v1.0.0
           </span>
-          <span className="absolute top-4 right-6 font-mono text-[10px] text-zk-green/30 tracking-widest select-none">
+          <span className="absolute top-4 right-6 font-mono text-[10px] text-zk-green/25 tracking-widest select-none">
             ARCH=x86_64
           </span>
-          <span className="absolute bottom-4 left-6 font-mono text-[10px] text-zk-green/30 tracking-widest select-none">
-            MEM_OK &nbsp;|&nbsp; CPU_OK &nbsp;|&nbsp; SEC_OK
+          <span className="absolute bottom-4 left-6 font-mono text-[10px] text-zk-green/25 tracking-widest select-none">
+            MEM_OK &nbsp;·&nbsp; CPU_OK &nbsp;·&nbsp; SEC_OK
           </span>
 
-          {/* ── Main terminal content ───────────────────────── */}
-          <div className="w-full max-w-3xl space-y-4">
+          {/* ── Main content ────────────────────────────────── */}
+          <div className="flex flex-col items-center gap-4 px-4 w-full">
 
-            {/* Blinking cursor (phase: cursor) */}
-            {phase === "cursor" && (
-              <span
-                className="inline-block w-3 h-5 bg-zk-green animate-cursor-blink"
-                aria-hidden="true"
+            {/* HUD ring */}
+            <div className="w-full" style={{ maxWidth: 440 }}>
+              <HudRing
+                progress={progress}
+                phase={phase}
+                readyFlash={readyFlash}
               />
-            )}
+            </div>
 
-            {/* Title line */}
-            {(phase !== "cursor") && (
-              <div className="font-mono text-sm sm:text-base text-zk-green font-bold tracking-widest">
-                {titleText}
-                {phase === "typing" && (
-                  <span
-                    className="inline-block w-2.5 h-4 bg-zk-green animate-cursor-blink align-bottom ml-0.5"
-                    aria-hidden="true"
-                  />
-                )}
-              </div>
-            )}
-
-            {/* Separator */}
-            {(phase === "logs" || phase === "progress" || phase === "ready") && (
-              <div className="font-mono text-[10px] text-zk-green/30 tracking-widest select-none">
-                {"─".repeat(60)}
-              </div>
-            )}
-
-            {/* Log stream */}
-            {(phase === "logs" || phase === "progress" || phase === "ready") && (
-              <div
-                ref={logRef}
-                className="h-48 overflow-hidden space-y-0.5"
+            {/* Log stream — last 4 lines */}
+            {(["logs", "progress", "ready"] as Phase[]).includes(phase) && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="w-full space-y-0.5"
+                style={{ maxWidth: 440 }}
               >
-                {visibleLogs.map((line, i) => (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, x: -6 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.15 }}
-                    className="font-mono text-[11px] sm:text-xs text-zk-green/80 whitespace-pre"
-                  >
-                    <span className="text-zk-green/40 mr-2 select-none">
-                      [{String(i + 1).padStart(2, "0")}]
-                    </span>
-                    {line}
-                  </motion.div>
-                ))}
-              </div>
-            )}
-
-            {/* Progress bar */}
-            {(phase === "progress" || phase === "ready") && (
-              <div className="space-y-1.5">
-                <div className="font-mono text-[10px] text-zk-green/50 tracking-widest">
-                  LOADING RUNTIME ENVIRONMENT
-                </div>
-                <ProgressBar pct={progress} />
-              </div>
+                {visibleLogs.slice(-4).map((line, i, arr) => {
+                  const idx = visibleLogs.length - arr.length + i;
+                  return (
+                    <motion.div
+                      key={idx}
+                      initial={{ opacity: 0, x: -5 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.12 }}
+                      className="font-mono text-[10px] whitespace-pre truncate"
+                      style={{ color: "rgba(0,255,65,0.48)" }}
+                    >
+                      <span style={{ color: "rgba(0,255,65,0.2)", marginRight: 6 }}>
+                        [{String(idx + 1).padStart(2, "0")}]
+                      </span>
+                      {line}
+                    </motion.div>
+                  );
+                })}
+              </motion.div>
             )}
 
             {/* SYSTEM READY */}
             {phase === "ready" && (
               <motion.div
-                animate={{ opacity: readyFlash ? 1 : 0.15 }}
+                animate={{ opacity: readyFlash ? 1 : 0.08 }}
                 transition={{ duration: 0.1 }}
-                className="font-mono text-lg sm:text-2xl font-bold text-zk-green tracking-[0.3em] text-glow mt-2"
+                className="font-mono text-lg font-bold tracking-[0.3em] select-none text-glow"
+                style={{ color: "#00FF41" }}
               >
                 ██ SYSTEM READY ██
               </motion.div>
