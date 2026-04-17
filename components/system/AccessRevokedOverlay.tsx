@@ -6,8 +6,8 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useRouter, usePathname }       from "next/navigation";
 import { useProfile }                   from "@/components/system/SessionContext";
+import { useSystemView, type SystemView } from "@/components/system/SystemViewContext";
 import { type Permission }              from "@/lib/types/permission";
 import { cn }                           from "@/lib/utils";
 import { ShieldOff, Lock, AlertTriangle } from "lucide-react";
@@ -15,10 +15,10 @@ import { isFounder, canViewInbox, canViewUsers } from "@/lib/permissions";
 
 const COUNTDOWN_S = 5;
 
-function pageIsNowForbidden(pathname: string, flags: readonly Permission[]): boolean {
-  if (pathname.startsWith("/system/roles")) return !isFounder(flags);
-  if (pathname.startsWith("/system/users")) return !canViewUsers(flags);
-  if (pathname.startsWith("/system/inbox")) return !canViewInbox(flags);
+function viewIsNowForbidden(view: SystemView, flags: readonly Permission[]): boolean {
+  if (view === "roles") return !isFounder(flags);
+  if (view === "users") return !canViewUsers(flags);
+  if (view === "inbox") return !canViewInbox(flags);
   return false;
 }
 
@@ -42,9 +42,8 @@ interface RevokeState {
 }
 
 export function AccessRevokedOverlay() {
-  const profile      = useProfile();
-  const router       = useRouter();
-  const pathname     = usePathname();
+  const profile            = useProfile();
+  const { view, navigate } = useSystemView();
 
   const [revokeState, setRevokeState] = useState<RevokeState | null>(null);
   const [timeLeft,    setTimeLeft]    = useState(COUNTDOWN_S);
@@ -53,11 +52,11 @@ export function AccessRevokedOverlay() {
   const prevFlagsRef      = useRef<Permission[]>(profile.accessFlags);
   const intervalRef       = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef      = useRef<number>(0);
-  const pathnameRef       = useRef(pathname);
+  const viewRef           = useRef(view);
   const shouldRedirectRef = useRef(false);
 
   // Keep refs in sync without re-registering listeners
-  useEffect(() => { pathnameRef.current = pathname; }, [pathname]);
+  useEffect(() => { viewRef.current = view; }, [view]);
 
   // Update prevFlagsRef AFTER the context re-renders with new flags.
   // This means onFlagsUpdated below always reads the flags from BEFORE the change.
@@ -73,7 +72,7 @@ export function AccessRevokedOverlay() {
       const revoked = (oldFlags as string[]).filter((f) => !newSet.has(f));
       if (revoked.length === 0) return; // only grants — nothing to show
 
-      const shouldRedirect = pageIsNowForbidden(pathnameRef.current, newFlags);
+      const shouldRedirect = viewIsNowForbidden(viewRef.current, newFlags);
       shouldRedirectRef.current = shouldRedirect;
 
       setRevokeState({ revoked, shouldRedirect });
@@ -101,7 +100,7 @@ export function AccessRevokedOverlay() {
       if (remaining <= 0) {
         clearInterval(intervalRef.current!);
         intervalRef.current = null;
-        if (shouldRedirectRef.current) router.push("/system/overview");
+        if (shouldRedirectRef.current) navigate("overview");
         setRevokeState(null);
       }
     }, 50);
@@ -109,7 +108,7 @@ export function AccessRevokedOverlay() {
     return () => {
       if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     };
-  }, [revokeState, router]);
+  }, [revokeState, navigate]);
 
   if (!revokeState) return null;
 

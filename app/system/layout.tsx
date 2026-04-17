@@ -9,15 +9,17 @@
 import { getSession }        from "@/lib/auth";
 import { buildProfile }      from "@/lib/profile";
 import { redirect }          from "next/navigation";
-import { SystemSidebar }     from "@/components/system/SystemSidebar";
-import { SystemHeader }      from "@/components/system/SystemHeader";
-import { SessionProvider }   from "@/components/system/SessionContext";
-import { PresenceTracker }   from "@/components/system/PresenceTracker";
-import { DisplayNameGate }   from "@/components/system/DisplayNameGate";
-import { ShellPrefetcher }        from "@/components/system/ShellPrefetcher";
-import { AccessRevokedOverlay }   from "@/components/system/AccessRevokedOverlay";
-import type { UserProfile }       from "@/lib/profile";
-import { asUserId }          from "@/lib/types/ids";
+import { SystemSidebar }       from "@/components/system/SystemSidebar";
+import { SystemHeader }        from "@/components/system/SystemHeader";
+import { SessionProvider }     from "@/components/system/SessionContext";
+import { PresenceTracker }     from "@/components/system/PresenceTracker";
+import { DisplayNameGate }     from "@/components/system/DisplayNameGate";
+import { ShellPrefetcher }     from "@/components/system/ShellPrefetcher";
+import { AccessRevokedOverlay } from "@/components/system/AccessRevokedOverlay";
+import { SystemViewProvider }  from "@/components/system/SystemViewContext";
+import { SystemContent }       from "@/components/system/SystemContent";
+import type { UserProfile }    from "@/lib/profile";
+import { asUserId }            from "@/lib/types/ids";
 
 // Fallback profile when DB is unreachable
 function fallbackProfile(session: { id: string; email: string; name: string; role: string }): UserProfile {
@@ -37,7 +39,7 @@ function fallbackProfile(session: { id: string; email: string; name: string; rol
 }
 
 export default async function SystemLayout({
-  children,
+  children: _children,
 }: {
   children: React.ReactNode;
 }) {
@@ -57,22 +59,25 @@ export default async function SystemLayout({
 
   return (
     <SessionProvider session={session} profile={profile}>
-      <PresenceTracker />
-      {/* Pre-warm all caches the user has permission to access */}
-      <ShellPrefetcher accessFlags={profile.accessFlags} />
-      {/* Blocking gate — renders only when display_name is empty */}
-      <DisplayNameGate initialDisplayName={profile.displayName} />
-      {/* Live permission-revoke notification — appears without page refresh */}
-      <AccessRevokedOverlay />
-      <div className="fixed inset-0 flex flex-col bg-zk-bg overflow-hidden">
-        <SystemHeader profile={profile} session={session} />
-        <div className="flex flex-1 overflow-hidden">
-          <SystemSidebar />
-          <main className="flex-1 overflow-hidden flex flex-col">
-            {children}
-          </main>
+      <SystemViewProvider>
+        <PresenceTracker />
+        {/* Pre-warm all caches the user has permission to access */}
+        <ShellPrefetcher accessFlags={profile.accessFlags} />
+        {/* Blocking gate — renders only when display_name is empty */}
+        <DisplayNameGate initialDisplayName={profile.displayName} />
+        {/* Live permission-revoke notification — appears without page refresh */}
+        <AccessRevokedOverlay />
+        <div className="fixed inset-0 flex flex-col bg-zk-bg overflow-hidden">
+          <SystemHeader profile={profile} session={session} />
+          <div className="flex flex-1 overflow-hidden">
+            <SystemSidebar />
+            {/* SystemContent renders sections via client state — no server round-trip */}
+            <main className="flex-1 overflow-hidden flex flex-col">
+              <SystemContent />
+            </main>
+          </div>
         </div>
-      </div>
+      </SystemViewProvider>
     </SessionProvider>
   );
 }

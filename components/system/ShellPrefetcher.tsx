@@ -29,10 +29,10 @@
 import { useEffect }                   from "react";
 import { getChatCache }                from "@/lib/chat-cache";
 import { getAppCache }                 from "@/lib/app-cache";
-import { canViewInbox, isFounder }     from "@/lib/permissions";
+import { canViewInbox, canViewUsers, isFounder } from "@/lib/permissions";
 import { type Permission }             from "@/lib/types/permission";
 import type { Channel, DMConversation }        from "@/components/system/chat/types";
-import type { CachedInboxItem, CachedRole, CachedPermission } from "@/lib/app-cache";
+import type { CachedInboxItem, CachedRole, CachedPermission, CachedUser } from "@/lib/app-cache";
 
 // ── Fetch helpers ─────────────────────────────────────────────────────────────
 
@@ -79,6 +79,20 @@ async function prefetchRoles(): Promise<void> {
     if (Array.isArray(data)) {
       cache.setRoles(data);
       window.dispatchEvent(new CustomEvent("zk:cache:roles"));
+    }
+  } catch { /* silent */ }
+}
+
+async function prefetchUsers(): Promise<void> {
+  const cache = getAppCache();
+  if (cache.isUsersFresh()) return;
+  try {
+    const res = await fetch("/api/users");
+    if (!res.ok) return;
+    const data = await res.json() as CachedUser[];
+    if (Array.isArray(data)) {
+      cache.setUsers(data);
+      window.dispatchEvent(new CustomEvent("zk:cache:users"));
     }
   } catch { /* silent */ }
 }
@@ -203,9 +217,10 @@ export function ShellPrefetcher({ accessFlags }: ShellPrefetcherProps) {
       await Promise.allSettled([
         prefetchChannels(),
         prefetchDmConvos(),
-        canViewInbox(accessFlags) ? prefetchInbox()       : Promise.resolve(),
-        isFounder(accessFlags)    ? prefetchRoles()       : Promise.resolve(),
-        isFounder(accessFlags)    ? prefetchPermissions() : Promise.resolve(),
+        canViewInbox(accessFlags)  ? prefetchInbox()       : Promise.resolve(),
+        canViewUsers(accessFlags)  ? prefetchUsers()       : Promise.resolve(),
+        isFounder(accessFlags)     ? prefetchRoles()       : Promise.resolve(),
+        isFounder(accessFlags)     ? prefetchPermissions() : Promise.resolve(),
       ]);
 
       if (closed) return;
@@ -244,6 +259,16 @@ export function ShellPrefetcher({ accessFlags }: ShellPrefetcherProps) {
           getAppCache().invalidateInbox();
           prefetchInbox().then(() => {
             window.dispatchEvent(new CustomEvent("zk:cache:inbox"));
+          }).catch(() => { /* silent */ });
+        }, 90_000));
+      }
+
+      // Users (if permitted): every 90 s
+      if (canViewUsers(accessFlags)) {
+        intervals.push(setInterval(() => {
+          getAppCache().invalidateUsers();
+          prefetchUsers().then(() => {
+            window.dispatchEvent(new CustomEvent("zk:cache:users"));
           }).catch(() => { /* silent */ });
         }, 90_000));
       }

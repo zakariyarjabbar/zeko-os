@@ -93,14 +93,12 @@ function blankRole() {
 }
 
 function RolesTab({ permissions }: { permissions: Permission[] }) {
-  // Initialise from cache (instant) — skip the loading skeleton if we have data
-  const cachedRoles = getAppCache().getRoles();
-
-  const [roles,    setRoles]    = useState<Role[]>(cachedRoles ?? []);
+  // Start empty — sessionStorage reads happen in useEffect (client-only)
+  const [roles,    setRoles]    = useState<Role[]>([]);
   const [detail,   setDetail]   = useState<RoleDetail | null>(null);
   const [mode,     setMode]     = useState<RoleRightMode>("view");
   const [form,     setForm]     = useState(blankRole());
-  const [loading,  setLoading]  = useState(cachedRoles === null);
+  const [loading,  setLoading]  = useState(true);
   const [saving,   setSaving]   = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [toast,    setToast]    = useState<{ type: "ok" | "err"; msg: string } | null>(null);
@@ -118,11 +116,13 @@ function RolesTab({ permissions }: { permissions: Permission[] }) {
   }, []);
 
   useEffect(() => {
-    // Stale-while-revalidate: show cached data instantly, always fetch fresh on mount.
-    // Spinner only if there was no cached data at all (cold open).
+    // Hydrate from sessionStorage → seed state instantly
+    getAppCache().hydrate();
+    const cachedRoles = getAppCache().getRoles();
+    if (cachedRoles) { setRoles(cachedRoles); setLoading(false); }
+
     fetchRoles(cachedRoles === null);
 
-    // Pick up background refreshes triggered by ShellPrefetcher's 3-min interval.
     const onCacheUpdate = () => {
       const fresh = getAppCache().getRoles();
       if (fresh) setRoles(fresh);
@@ -949,17 +949,17 @@ function PermissionsTab() {
 
 // ─── Root page: IAM Control Panel ─────────────────────────────
 export default function IAMPage() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>("roles");
+  const [activeTab,   setActiveTab]   = useState<ActiveTab>("roles");
+  // Start empty so SSR and client initial render match
+  const [perms,       setPerms]       = useState<Permission[]>([]);
+  const [permsLoaded, setPermsLoaded] = useState(false);
 
-  // Read from cache immediately — instant stats ribbon with no flash.
-  const cachedPagePerms = getAppCache().getPermissions() as Permission[] | null;
-  const [perms,       setPerms]       = useState<Permission[]>(cachedPagePerms ?? []);
-  const [permsLoaded, setPermsLoaded] = useState(cachedPagePerms !== null);
-
-  // Stale-while-revalidate: always revalidate in background on mount.
-  // Keeps the permission count in the stats ribbon current even if the cache
-  // was pre-warmed minutes ago before someone added/removed a permission.
   useEffect(() => {
+    // Hydrate from sessionStorage → seed instantly
+    getAppCache().hydrate();
+    const cached = getAppCache().getPermissions() as Permission[] | null;
+    if (cached) { setPerms(cached); setPermsLoaded(true); }
+    // Always revalidate on mount
     fetch("/api/permissions")
       .then((r) => r.ok ? r.json() : [])
       .then((data: Permission[]) => {

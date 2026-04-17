@@ -1,6 +1,8 @@
 // app/system/overview/page.tsx
 // Placeholder — Phase 2 scaffold.
 
+"use client";
+
 import { Badge } from "@/components/ui/Badge";
 
 export default function OverviewPage() {

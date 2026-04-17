@@ -5,12 +5,11 @@
 
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { LayoutDashboard, MessageSquare, Inbox, Users, Lock, ShieldCheck } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { useProfile } from "@/components/system/SessionContext";
+import { useSystemView, type SystemView } from "@/components/system/SystemViewContext";
 import { isFounder, canViewInbox, canViewUsers } from "@/lib/permissions";
 import { type Permission, asPermission } from "@/lib/types/permission";
 import { getAppCache } from "@/lib/app-cache";
@@ -25,19 +24,19 @@ function checkFlag(requireFlag: string, flags: readonly Permission[]): boolean {
 
 // ─── Nav config ───────────────────────────────────────────────
 interface NavItem {
-  href:        string;
+  view:        SystemView;
   label:       string;
   icon:        React.ElementType;
-  requireFlag?: string; // access flag required to use this item
+  requireFlag?: string;
   badge?:      "unread";
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/system/overview", label: "Overview", icon: LayoutDashboard },
-  { href: "/system/chat",     label: "Chat",     icon: MessageSquare    },
-  { href: "/system/inbox",    label: "Inbox",    icon: Inbox,       badge: "unread", requireFlag: "view-inbox" },
-  { href: "/system/users",    label: "Users",    icon: Users,       requireFlag: "moderator" },
-  { href: "/system/roles",    label: "Roles",    icon: ShieldCheck, requireFlag: "Administrator" },
+  { view: "overview", label: "Overview", icon: LayoutDashboard },
+  { view: "chat",     label: "Chat",     icon: MessageSquare    },
+  { view: "inbox",    label: "Inbox",    icon: Inbox,       badge: "unread", requireFlag: "view-inbox" },
+  { view: "users",    label: "Users",    icon: Users,       requireFlag: "moderator" },
+  { view: "roles",    label: "Roles",    icon: ShieldCheck, requireFlag: "Administrator" },
 ];
 
 // ─── Locked item ──────────────────────────────────────────────
@@ -104,28 +103,21 @@ function LockedItem({ label, icon: Icon }: { label: string; icon: React.ElementT
 
 // ─── Component ────────────────────────────────────────────────
 export function SystemSidebar() {
-  const pathname = usePathname();
+  const { view, navigate } = useSystemView();
   const profile  = useProfile();
   const founder  = isFounder(profile.accessFlags);
   const [unread, setUnread] = useState(0);
 
   // ── Unread count — driven by app cache, no polling ──────────
-  // ShellPrefetcher keeps the cache warm and dispatches "zk:cache:inbox"
-  // whenever it updates.  We just read the count from the cache.
   useEffect(() => {
     if (!canViewInbox(profile.accessFlags)) return;
 
     function syncUnread() {
       const cached = getAppCache().getInbox();
-      if (cached) {
-        setUnread(cached.filter((m) => !m.read).length);
-      }
+      if (cached) setUnread(cached.filter((m) => !m.read).length);
     }
 
-    // Read immediately (cache may already be warm from ShellPrefetcher)
     syncUnread();
-
-    // Re-read whenever the cache is updated by ShellPrefetcher
     window.addEventListener("zk:cache:inbox", syncUnread);
     return () => window.removeEventListener("zk:cache:inbox", syncUnread);
   }, [profile.accessFlags]);
@@ -142,24 +134,23 @@ export function SystemSidebar() {
       </div>
 
       <nav className="flex flex-col gap-0.5 px-2">
-        {NAV_ITEMS.map(({ href, label, icon: Icon, requireFlag, badge }) => {
+        {NAV_ITEMS.map(({ view: itemView, label, icon: Icon, requireFlag, badge }) => {
           const locked = !!requireFlag && !checkFlag(requireFlag, profile.accessFlags);
 
-          // Render locked version
           if (locked) {
-            return <LockedItem key={href} label={label} icon={Icon} />;
+            return <LockedItem key={itemView} label={label} icon={Icon} />;
           }
 
-          const active   = pathname === href || pathname.startsWith(href + "/");
+          const active    = view === itemView;
           const showBadge = badge === "unread" && unread > 0 && !active;
 
           return (
-            <Link
-              key={href}
-              href={href}
+            <button
+              key={itemView}
+              onClick={() => navigate(itemView)}
               className={cn(
-                "flex items-center gap-2.5 px-3 py-2 rounded",
-                "font-sans text-sm text-zk-white",
+                "flex items-center gap-2.5 px-3 py-2 rounded text-left w-full",
+                "font-sans text-sm",
                 "transition-all duration-150",
                 active
                   ? "border-l-2 border-l-zk-green bg-zk-green/[0.06] text-zk-green pl-[10px]"
@@ -180,7 +171,7 @@ export function SystemSidebar() {
               {active && (
                 <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-zk-green" />
               )}
-            </Link>
+            </button>
           );
         })}
       </nav>

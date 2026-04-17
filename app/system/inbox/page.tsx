@@ -79,14 +79,12 @@ export default function InboxPage() {
   const profile   = useProfile();
   const canManage = canManageInbox(profile.accessFlags);
 
-  // ── Initialise from cache (instant), then refresh if stale ──
   const cache = getAppCache();
-  const cached = cache.getInbox();
 
-  const [messages,  setMessages]  = useState<ContactMessage[]>(cached ?? []);
+  // Start empty so SSR and first client render match (sessionStorage is client-only)
+  const [messages,  setMessages]  = useState<ContactMessage[]>([]);
   const [selected,  setSelected]  = useState<ContactMessage | null>(null);
-  // Skip the loading skeleton when we already have cached data
-  const [loading,   setLoading]   = useState(cached === null);
+  const [loading,   setLoading]   = useState(true);
   const [deleting,  setDeleting]  = useState(false);
   const [replyText, setReplyText] = useState("");
   const [sending,   setSending]   = useState(false);
@@ -110,9 +108,16 @@ export default function InboxPage() {
   }, [cache]);
 
   useEffect(() => {
-    // If we had cached data it was already shown — only fetch if stale
+    // Hydrate from sessionStorage → seed state instantly
+    cache.hydrate();
+    const cached = cache.getInbox();
+    if (cached) {
+      setMessages(cached);
+      setLoading(false);
+    }
+    // Fetch if stale or cold
     if (!cache.isInboxFresh()) {
-      fetchMessages(!cached);  // show spinner only on cold cache miss
+      fetchMessages(cached === null);
     }
 
     // Re-sync whenever ShellPrefetcher updates the cache via SSE

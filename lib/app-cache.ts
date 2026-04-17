@@ -22,6 +22,9 @@ const ROLES_FRESH_MS  = 120_000;
 /** Permissions list stays fresh for 2 min — permissions change even less often. */
 const PERMS_FRESH_MS  = 120_000;
 
+/** Users list stays fresh for 90 s — changes on create/edit/delete. */
+const USERS_FRESH_MS  = 90_000;
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 interface Stamped<T> {
@@ -55,12 +58,32 @@ export interface CachedRole {
   userCount:   number;
 }
 
+export interface CachedUserProfile {
+  id:             string;
+  display_id:     number;
+  display_name:   string;
+  username:       string;
+  access_flags:   string[];
+  session_status: string;
+}
+
+export interface CachedUser {
+  id:             string;
+  email:          string;
+  emailConfirmed: boolean;
+  createdAt:      string;
+  lastSignIn:     string | null;
+  profile:        CachedUserProfile | null;
+  roles:          { id: string; name: string }[];
+}
+
 // ── AppCacheStore ────────────────────────────────────────────────────────────
 
 class AppCacheStore {
   private inbox:  Stamped<CachedInboxItem[]>    | null = null;
   private roles:  Stamped<CachedRole[]>          | null = null;
   private perms:  Stamped<CachedPermission[]>    | null = null;
+  private users:  Stamped<CachedUser[]>          | null = null;
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -146,6 +169,25 @@ class AppCacheStore {
     if (this.perms) this.perms.fetchedAt = 0;
   }
 
+  // ── Users ─────────────────────────────────────────────────────────────────
+
+  getUsers(): CachedUser[] | null {
+    return this.users?.data ?? null;
+  }
+
+  isUsersFresh(): boolean {
+    return !!this.users && AppCacheStore.fresh(this.users.fetchedAt, USERS_FRESH_MS);
+  }
+
+  setUsers(data: CachedUser[]): void {
+    this.users = { data, fetchedAt: AppCacheStore.now() };
+    this.persist("users", data);
+  }
+
+  invalidateUsers(): void {
+    if (this.users) this.users.fetchedAt = 0;
+  }
+
   // ── sessionStorage ────────────────────────────────────────────────────────
 
   private persist<T>(key: string, data: T): void {
@@ -192,6 +234,11 @@ class AppCacheStore {
     if (!this.perms) {
       const e = this.loadFromSession<CachedPermission[]>("perms");
       if (e) this.perms = e;
+    }
+
+    if (!this.users) {
+      const e = this.loadFromSession<CachedUser[]>("users");
+      if (e) this.users = e;
     }
   }
 }

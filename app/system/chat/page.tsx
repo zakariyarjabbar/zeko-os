@@ -12,6 +12,7 @@ import { useSession }    from "@/components/system/SessionContext";
 import { useProfile }    from "@/components/system/SessionContext";
 import { cn }            from "@/lib/utils";
 import { getChatCache }  from "@/lib/chat-cache";
+import { getAppCache }   from "@/lib/app-cache";
 import { supabase }      from "@/lib/supabase/client";
 import {
   type Channel, type ChatMessage, type DMConversation,
@@ -76,6 +77,7 @@ export default function ChatPage() {
   const profile = useProfile();
 
   // ── UI state ──────────────────────────────────────────────
+  // Start empty — cache hydration happens in useEffect (sessionStorage is client-only)
   const [channels,        setChannels]        = useState<Channel[]>([]);
   const [messages,        setMessages]        = useState<ChatMessage[]>([]);
   const [dmConvos,        setDmConvos]        = useState<DMConversation[]>([]);
@@ -203,10 +205,15 @@ export default function ChatPage() {
 
   // ── Hydrate + initial load ─────────────────────────────────
   //
-  // hydrate() populates the in-memory cache from sessionStorage so that
-  // fetchChannels / fetchDmConvos can show cached data instantly.
   useEffect(() => {
+    // Hydrate from sessionStorage → seed state before network fetch
     getChatCache().hydrate();
+    getAppCache().hydrate();
+    const cachedCh  = getChatCache().getChannels();
+    const cachedDms = getChatCache().getDmConvos();
+    if (cachedCh)  { setChannels(cachedCh);   setLoadingChannels(false); }
+    if (cachedDms) { setDmConvos(cachedDms);  setLoadingDms(false); }
+
     fetchChannels();
     fetchDmConvos();
   }, [fetchChannels, fetchDmConvos]);

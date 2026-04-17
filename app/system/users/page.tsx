@@ -15,23 +15,11 @@ import {
 import { cn } from "@/lib/utils";
 import { useProfile } from "@/components/system/SessionContext";
 import { canCreateUsers, canDeleteUsers, isFounder } from "@/lib/permissions";
+import { getAppCache } from "@/lib/app-cache";
+import type { CachedUser as UserRow, CachedPermission as Permission, CachedRole as Role } from "@/lib/app-cache";
 
-// ─── Types ────────────────────────────────────────────────────
-interface Permission { id: string; name: string; description: string; }
-interface Role       { id: string; name: string; }
-interface UserProfile {
-  id:             string;
-  display_id:     number;
-  display_name:   string;
-  username:       string;
-  access_flags:   string[];
-  session_status: string;
-}
-interface UserRow {
-  id: string; email: string; emailConfirmed: boolean;
-  createdAt: string; lastSignIn: string | null;
-  profile: UserProfile | null; roles: Role[];
-}
+// Alias for local use — shape is identical to CachedUserProfile
+type UserProfile = NonNullable<UserRow["profile"]>;
 
 const STATUS_DOT: Record<string, string> = {
   ONLINE:  "bg-zk-green shadow-glow-sm",
@@ -171,7 +159,9 @@ export default function UsersPage() {
   const canCreate = canCreateUsers(actorFlags);
   const canDelete = canDeleteUsers(actorFlags);
 
-  // data
+  const cache = getAppCache();
+
+  // data — start empty so SSR and client initial render match (no sessionStorage on server)
   const [users,       setUsers]       = useState<UserRow[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [roles,       setRoles]       = useState<Role[]>([]);
@@ -196,20 +186,62 @@ export default function UsersPage() {
   const [presence, setPresence] = useState<Record<string, "ONLINE" | "OFFLINE">>({});
 
   // ── Data fetching ──────────────────────────────────────────
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
-    const [uRes, pRes, rRes] = await Promise.all([
-      fetch("/api/users"),
-      fetch("/api/permissions"),
-      fetch("/api/roles"),
-    ]);
-    if (uRes.ok) setUsers(await uRes.json());
-    if (pRes.ok) setPermissions(await pRes.json());
-    if (rRes.ok) setRoles(await rRes.json());
-    setLoading(false);
-  }, []);
+  const fetchAll = useCallback(async (showSpinner = false) => {
+    if (showSpinner) setLoading(true);
+    try {
+      const [uRes, pRes, rRes] = await Promise.all([
+        fetch("/api/users"),
+        cache.isPermissionsFresh() ? Promise.resolve(null) : fetch("/api/permissions"),
+        cache.isRolesFresh()       ? Promise.resolve(null) : fetch("/api/roles"),
+      ]);
+      if (uRes.ok) {
+        const data = await uRes.json() as UserRow[];
+        cache.setUsers(data);
+        setUsers(data);
+      }
+      if (pRes && pRes.ok) {
+        const data = await pRes.json() as Permission[];
+        cache.setPermissions(data);
+        setPermissions(data);
+      } else if (!pRes) {
+        const fresh = cache.getPermissions() as Permission[] | null;
+        if (fresh) setPermissions(fresh);
+      }
+      if (rRes && rRes.ok) {
+        const data = await rRes.json() as Role[];
+        cache.setRoles(data);
+        setRoles(data);
+      } else if (!rRes) {
+        const fresh = cache.getRoles() as Role[] | null;
+        if (fresh) setRoles(fresh);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [cache]);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => {
+    // Hydrate from sessionStorage → seed state instantly → then background-fetch
+    cache.hydrate();
+    const cachedUsers = cache.getUsers();
+    const cachedPerms = cache.getPermissions() as Permission[] | null;
+    const cachedRoles = cache.getRoles() as Role[] | null;
+    if (cachedUsers) setUsers(cachedUsers);
+    if (cachedPerms) setPermissions(cachedPerms);
+    if (cachedRoles) setRoles(cachedRoles);
+
+    // Stale-while-revalidate: fetch fresh data (spinner only on cold cache miss)
+    fetchAll(cachedUsers === null);
+
+    // Re-sync when ShellPrefetcher background-refreshes the cache
+    function onUsersUpdate() {
+      const fresh = getAppCache().getUsers();
+      if (fresh) setUsers(fresh);
+    }
+    window.addEventListener("zk:cache:users", onUsersUpdate);
+    return () => window.removeEventListener("zk:cache:users", onUsersUpdate);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const fetchPresence = useCallback(async (ids: string[]) => {
     if (ids.length === 0) return;
@@ -316,7 +348,7 @@ export default function UsersPage() {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Failed to create user.");
-        await fetchAll();
+        cache.invalidateUsers(); await fetchAll();
         setRightMode(null);
         setSelected(null);
         setToast({ type: "ok", msg: "User created." });
@@ -357,7 +389,7 @@ export default function UsersPage() {
     } else {
       setSelected(null);
       setRightMode(null);
-      await fetchAll();
+      cache.invalidateUsers(); await fetchAll();
     }
     setDeleting(false);
   }
@@ -405,7 +437,7 @@ export default function UsersPage() {
               </div>
               <div className="flex items-center gap-1">
                 <button
-                  onClick={fetchAll}
+                  onClick={() => fetchAll(true)}
                   title="Refresh registry"
                   className="p-1 text-zk-muted/35 hover:text-zk-green transition-colors"
                 >
