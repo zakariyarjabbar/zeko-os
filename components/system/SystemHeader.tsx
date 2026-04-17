@@ -56,7 +56,7 @@ function LiveClock() {
     return () => clearInterval(id);
   }, []);
   return (
-    <span className="font-mono text-[11px] text-zk-muted/50 tabular-nums select-none">
+    <span className="font-mono text-xs text-zk-muted/50 tabular-nums select-none">
       {time}
     </span>
   );
@@ -73,18 +73,18 @@ function IconBtn({
       aria-label={label}
       onClick={onClick}
       className={cn(
-        "relative flex items-center justify-center w-8 h-8 rounded-sm",
-        "border transition-all duration-150 cursor-pointer",
+        "relative flex items-center justify-center w-8 h-8 rounded",
+        "transition-all duration-150 cursor-pointer",
         active
-          ? "border-zk-green/40 bg-zk-green/10 text-zk-green"
-          : "border-transparent text-zk-muted/60 hover:text-zk-green hover:border-zk-border/60 hover:bg-zk-green/5"
+          ? "bg-zk-green/10 text-zk-green"
+          : "text-zk-muted/60 hover:text-zk-white hover:bg-zk-surface"
       )}
     >
       {icon}
       {badge && (
         <span
           aria-hidden="true"
-          className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-zk-red shadow-[0_0_6px_rgba(255,59,59,0.8)]"
+          className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-zk-red shadow-[0_0_6px_rgba(255,59,59,0.8)]"
         />
       )}
     </button>
@@ -139,7 +139,7 @@ export function SystemHeader({ session, profile }: SystemHeaderProps) {
         />
       )}
       <header className={cn(
-        "h-11 flex items-center justify-between px-5 shrink-0 relative",
+        "h-12 flex items-center justify-between px-5 shrink-0 relative",
         "border-b border-zk-border/60",
         "bg-[rgba(5,5,5,0.95)] backdrop-blur-[8px]",
       )}>
@@ -147,36 +147,36 @@ export function SystemHeader({ session, profile }: SystemHeaderProps) {
         <div className="flex items-center gap-4">
           {/* Wordmark */}
           <Link href="/" className="flex items-center gap-2 group shrink-0">
-            <Terminal size={13} className="text-zk-green group-hover:text-glow transition-all" />
-            <span className="font-mono text-sm font-bold text-zk-green tracking-widest group-hover:text-glow transition-all">
-              ZEKO OS
+            <Terminal size={14} className="text-zk-green transition-all" />
+            <span className="font-sans text-sm font-bold text-zk-green tracking-tight transition-all">
+              Zeko OS
             </span>
           </Link>
 
           {/* Breadcrumb */}
           <div className="flex items-center gap-1.5 text-zk-muted/40 select-none">
-            <span className="font-mono text-[10px]">/</span>
-            <span className="font-mono text-[11px] text-zk-muted/60 tracking-wider">
+            <span className="font-sans text-xs text-zk-muted/40">/</span>
+            <span className="font-sans text-sm text-zk-muted/60">
               {routeLabel}
             </span>
           </div>
         </div>
 
-        {/* ── Center: live clock ────────────────────────────── */}
+        {/* ── Center: live clock + username ────────────────── */}
         <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-3">
           <LiveClock />
           <span className="w-px h-3 bg-zk-border/60" />
-          <span className="font-mono text-[11px] text-zk-muted/40 tracking-widest select-none">
+          <span className="font-sans text-xs text-zk-muted/40 select-none">
             {(profile.displayName || session.name).toLowerCase()}
           </span>
         </div>
 
         {/* ── Right ────────────────────────────────────────── */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           {/* Bell */}
           <div className="relative">
             <IconBtn
-              icon={<Bell size={14} />}
+              icon={<Bell size={15} />}
               label="Alerts"
               badge={alerts.length > 0}
               active={alertsOpen}
@@ -186,19 +186,19 @@ export function SystemHeader({ session, profile }: SystemHeaderProps) {
 
           {/* Profile */}
           <IconBtn
-            icon={<User size={14} />}
+            icon={<User size={15} />}
             label="Profile"
             active={profileOpen}
             onClick={() => setProfileOpen((v) => !v)}
           />
 
-          <span className="w-px h-4 bg-zk-border/60 mx-1" aria-hidden="true" />
+          <span className="w-px h-4 bg-zk-border/60 mx-1.5" aria-hidden="true" />
 
           {/* Logout */}
           <IconBtn
             icon={loggingOut
-              ? <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-              : <LogOut size={14} />
+              ? <span className="w-3.5 h-3.5 border border-current border-t-transparent rounded-full animate-spin" />
+              : <LogOut size={15} />
             }
             label="Log out"
             onClick={handleLogout}

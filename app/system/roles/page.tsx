@@ -37,8 +37,7 @@ const STATUS_DOT: Record<string, string> = {
 // ─── Shared primitives ────────────────────────────────────────
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="flex items-center gap-1.5 font-mono text-[9px] text-zk-muted/35 tracking-[0.22em] uppercase mb-3">
-      <span className="text-zk-green/35">//</span>
+    <p className="flex items-center gap-1.5 font-sans text-xs text-zk-muted/50 uppercase tracking-wide mb-3">
       {children}
     </p>
   );
@@ -51,8 +50,8 @@ function InlineInput({
   placeholder?: string; multiline?: boolean; disabled?: boolean;
 }) {
   const cls = cn(
-    "w-full px-3 py-2 rounded-sm border bg-zk-surface/60 border-zk-border",
-    "font-mono text-xs text-zk-white placeholder:text-zk-muted/30",
+    "w-full px-3 py-2 rounded border bg-zk-surface/60 border-zk-border",
+    "font-sans text-sm text-zk-white placeholder:text-zk-muted/30",
     "outline-none focus:border-zk-green/50 transition-colors resize-none",
     "disabled:opacity-40 disabled:cursor-not-allowed",
   );
@@ -80,7 +79,7 @@ function FieldWrap({ label, children, required }: {
 }) {
   return (
     <div>
-      <label className="block font-mono text-[10px] text-zk-muted/50 tracking-widest uppercase mb-1.5">
+      <label className="block font-sans text-xs text-zk-muted/50 uppercase tracking-wide mb-1.5">
         {label}{required && <span className="text-zk-green ml-1">*</span>}
       </label>
       {children}
@@ -214,8 +213,8 @@ function RolesTab({ permissions }: { permissions: Permission[] }) {
         <div className="flex items-center justify-between px-3 py-3 border-b border-zk-border/30 shrink-0">
           <div className="flex items-center gap-2">
             <ShieldCheck size={12} className="text-zk-green" />
-            <span className="font-mono text-[11px] font-semibold text-zk-green tracking-widest">ROLES</span>
-            <span className="font-mono text-[9px] text-zk-muted/35">({roles.length})</span>
+            <span className="font-sans text-sm font-semibold text-zk-white">Roles</span>
+            <span className="font-sans text-xs text-zk-muted/35">({roles.length})</span>
           </div>
           <div className="flex items-center gap-1">
             <button onClick={() => fetchRoles(true)} className="p-1 text-zk-muted/35 hover:text-zk-green transition-colors">
@@ -223,7 +222,7 @@ function RolesTab({ permissions }: { permissions: Permission[] }) {
             </button>
             <button
               onClick={openCreate}
-              className="flex items-center gap-1 px-2 py-1 rounded-sm border font-mono text-[9px] text-zk-green border-zk-green/25 bg-zk-green/5 hover:bg-zk-green/12 hover:border-zk-green/50 transition-all"
+              className="flex items-center gap-1 px-2 py-1 rounded-sm border font-sans text-xs text-zk-green border-zk-green/25 bg-zk-green/5 hover:bg-zk-green/12 hover:border-zk-green/50 transition-all"
             >
               <Plus size={9} /> New
             </button>
@@ -256,21 +255,21 @@ function RolesTab({ permissions }: { permissions: Permission[] }) {
                     <div className="flex items-center gap-2 mb-1">
                       <ShieldCheck size={11} className={active ? "text-zk-green" : "text-zk-muted/40"} />
                       <span className={cn(
-                        "font-mono text-[11px] font-semibold truncate",
+                        "font-sans text-sm font-semibold truncate",
                         active ? "text-zk-green" : "text-zk-white",
                       )}>
                         {role.name}
                       </span>
                     </div>
-                    <p className="font-mono text-[10px] text-zk-muted/40 line-clamp-1 pl-5">
+                    <p className="font-sans text-xs text-zk-muted/40 line-clamp-1 pl-5">
                       {role.description || "No description"}
                     </p>
                     <div className="flex items-center gap-3 mt-1.5 pl-5">
-                      <span className="flex items-center gap-1 font-mono text-[9px] text-zk-muted/30">
+                      <span className="flex items-center gap-1 font-sans text-xs text-zk-muted/30">
                         <Users size={8} />
                         {role.userCount} {role.userCount === 1 ? "user" : "users"}
                       </span>
-                      <span className="font-mono text-[9px] text-zk-muted/25">
+                      <span className="font-sans text-xs text-zk-muted/25">
                         {role.permissions.length} perms
                       </span>
                     </div>
@@ -281,7 +280,7 @@ function RolesTab({ permissions }: { permissions: Permission[] }) {
           {!loading && roles.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 gap-2">
               <ShieldCheck size={18} className="text-zk-muted/15" />
-              <p className="font-mono text-[10px] text-zk-muted/25 tracking-widest">NO ROLES YET</p>
+              <p className="font-sans text-xs text-zk-muted/25">No roles yet</p>
             </div>
           )}
         </div>
@@ -297,7 +296,7 @@ function RolesTab({ permissions }: { permissions: Permission[] }) {
               initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
               className={cn(
-                "shrink-0 flex items-center gap-2 px-5 py-2 border-b font-mono text-[11px]",
+                "shrink-0 flex items-center gap-2 px-5 py-2 border-b font-sans text-sm",
                 toast.type === "ok"
                   ? "border-zk-green/15 bg-zk-green/5 text-zk-green"
                   : "border-zk-red/15 bg-zk-red/5 text-zk-red",
@@ -324,8 +323,8 @@ function RolesTab({ permissions }: { permissions: Permission[] }) {
               <div className="shrink-0 flex items-center justify-between px-6 py-3 border-b border-zk-border/50 bg-zk-surface/15">
                 <div className="flex items-center gap-2">
                   {isEditing
-                    ? <><Edit3 size={13} className="text-zk-green" /><span className="font-mono text-[11px] font-semibold text-zk-green tracking-widest">{mode === "create" ? "NEW ROLE" : "EDIT ROLE"}</span></>
-                    : <><ShieldCheck size={13} className="text-zk-green" /><span className="font-mono text-[11px] font-semibold text-zk-green tracking-widest">{detail?.name.toUpperCase()}</span></>
+                    ? <><Edit3 size={13} className="text-zk-green" /><span className="font-sans text-sm font-semibold text-zk-white">{mode === "create" ? "New Role" : "Edit Role"}</span></>
+                    : <><ShieldCheck size={13} className="text-zk-green" /><span className="font-sans text-sm font-semibold text-zk-white">{detail?.name}</span></>
                   }
                 </div>
                 <div className="flex items-center gap-2">
@@ -333,14 +332,14 @@ function RolesTab({ permissions }: { permissions: Permission[] }) {
                     <>
                       <button
                         onClick={() => { setMode("edit"); setToast(null); }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border font-mono text-[10px] border-zk-border/50 text-zk-slate hover:text-zk-white hover:border-zk-green/30 transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border font-sans text-sm border-zk-border/50 text-zk-slate hover:text-zk-white hover:border-zk-green/30 transition-all"
                       >
                         <Edit3 size={11} /> Edit
                       </button>
                       <button
                         onClick={handleDelete}
                         disabled={deleting}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border font-mono text-[10px] border-zk-red/25 bg-zk-red/5 text-zk-red hover:bg-zk-red/12 hover:border-zk-red/50 disabled:opacity-40 transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border font-sans text-sm border-zk-red/25 bg-zk-red/5 text-zk-red hover:bg-zk-red/12 hover:border-zk-red/50 disabled:opacity-40 transition-all"
                       >
                         {deleting
                           ? <span className="w-3 h-3 border border-zk-red border-t-transparent rounded-full animate-spin" />
@@ -386,7 +385,7 @@ function RolesTab({ permissions }: { permissions: Permission[] }) {
                       <div className="flex items-center gap-3">
                         <ShieldCheck size={18} className="text-zk-green/60" />
                         <span className="font-mono text-xl font-bold text-zk-white">{detail?.name}</span>
-                        <span className="font-mono text-[10px] text-zk-muted/30 ml-1">
+                        <span className="font-sans text-xs text-zk-muted/30 ml-1">
                           {detail?.permissions.length} permissions · {detail?.userCount} users
                         </span>
                       </div>
@@ -405,7 +404,7 @@ function RolesTab({ permissions }: { permissions: Permission[] }) {
                         />
                       </FieldWrap>
                     ) : (
-                      <p className="font-mono text-sm text-zk-slate leading-relaxed">
+                      <p className="font-sans text-sm text-zk-slate leading-relaxed">
                         {detail?.description || <span className="text-zk-muted/25 italic">No description</span>}
                       </p>
                     )}
@@ -417,8 +416,8 @@ function RolesTab({ permissions }: { permissions: Permission[] }) {
                   <SectionLabel>permissions</SectionLabel>
                   {permissions.length === 0 ? (
                     <div className="px-4 py-8 rounded-sm border border-dashed border-zk-border/25 text-center">
-                      <p className="font-mono text-[10px] text-zk-muted/25 tracking-widest">NO PERMISSIONS DEFINED</p>
-                      <p className="font-mono text-[9px] text-zk-muted/20 mt-1">Add them in the Permissions tab</p>
+                      <p className="font-sans text-xs text-zk-muted/25">No permissions defined</p>
+                      <p className="font-sans text-xs text-zk-muted/20 mt-1">Add them in the Permissions tab</p>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 gap-1.5">
@@ -455,13 +454,13 @@ function RolesTab({ permissions }: { permissions: Permission[] }) {
                             </div>
                             <div>
                               <span className={cn(
-                                "font-mono text-[11px] tracking-widest",
+                                "font-mono text-xs",
                                 active ? "text-zk-green" : "text-zk-muted/45",
                               )}>
                                 {perm.name}
                               </span>
                               {perm.description && (
-                                <p className="font-mono text-[10px] text-zk-muted/30 mt-0.5">{perm.description}</p>
+                                <p className="font-sans text-xs text-zk-muted/30 mt-0.5">{perm.description}</p>
                               )}
                             </div>
                           </div>
@@ -477,7 +476,7 @@ function RolesTab({ permissions }: { permissions: Permission[] }) {
                     <SectionLabel>assigned users ({detail.users.length})</SectionLabel>
                     {detail.users.length === 0 ? (
                       <div className="px-4 py-4 rounded-sm border border-dashed border-zk-border/20 text-center">
-                        <p className="font-mono text-[10px] text-zk-muted/25 tracking-widest">NO USERS ASSIGNED</p>
+                        <p className="font-sans text-xs text-zk-muted/25">No users assigned</p>
                       </div>
                     ) : (
                       <div className="space-y-1.5">
@@ -490,11 +489,11 @@ function RolesTab({ permissions }: { permissions: Permission[] }) {
                               "w-1.5 h-1.5 rounded-full shrink-0",
                               STATUS_DOT[u.session_status] ?? STATUS_DOT.OFFLINE,
                             )} />
-                            <span className="font-mono text-[11px] text-zk-white">
+                            <span className="font-sans text-sm text-zk-white">
                               {u.username}
                             </span>
-                            <span className="font-mono text-[10px] text-zk-muted/45">@{u.username}</span>
-                            <span className="ml-auto font-mono text-[9px] text-zk-green/50">#{u.display_id}</span>
+                            <span className="font-sans text-xs text-zk-muted/45">@{u.username}</span>
+                            <span className="ml-auto font-mono text-xs text-zk-green/50">#{u.display_id}</span>
                           </div>
                         ))}
                       </div>
@@ -515,14 +514,14 @@ function RolesTab({ permissions }: { permissions: Permission[] }) {
                       }
                       setToast(null);
                     }}
-                    className="font-mono text-[11px] text-zk-muted/40 hover:text-zk-slate transition-colors"
+                    className="font-sans text-sm text-zk-muted/40 hover:text-zk-slate transition-colors"
                   >
                     ← Cancel
                   </button>
                   <button
                     onClick={handleSave}
                     disabled={saving || !form.name.trim()}
-                    className="flex items-center gap-2 px-5 py-2 rounded-sm border font-mono text-xs tracking-wider border-zk-green/35 bg-zk-green/8 text-zk-green hover:bg-zk-green/18 hover:border-zk-green/60 disabled:opacity-40 disabled:pointer-events-none transition-all"
+                    className="flex items-center gap-2 px-5 py-2 rounded border font-sans text-sm font-medium border-zk-green/35 bg-zk-green/8 text-zk-green hover:bg-zk-green/18 hover:border-zk-green/60 disabled:opacity-40 disabled:pointer-events-none transition-all"
                   >
                     {saving
                       ? <span className="w-3 h-3 border border-zk-green border-t-transparent rounded-full animate-spin" />
@@ -542,12 +541,12 @@ function RolesTab({ permissions }: { permissions: Permission[] }) {
                 <ShieldCheck size={24} className="text-zk-green/20" />
               </div>
               <div className="text-center space-y-1">
-                <p className="font-mono text-[11px] text-zk-muted/30 tracking-widest">SELECT A ROLE OR CREATE NEW</p>
-                <p className="font-mono text-[9px] text-zk-muted/20">define access boundaries for your team</p>
+                <p className="font-sans text-sm text-zk-muted/30">Select a role or create new</p>
+                <p className="font-sans text-xs text-zk-muted/20">define access boundaries for your team</p>
               </div>
               <button
                 onClick={openCreate}
-                className="flex items-center gap-2 px-4 py-2 rounded-sm border font-mono text-xs border-zk-green/25 bg-zk-green/5 text-zk-green/60 hover:text-zk-green hover:bg-zk-green/12 hover:border-zk-green/40 transition-all"
+                className="flex items-center gap-2 px-4 py-2 rounded border font-sans text-sm font-medium border-zk-green/25 bg-zk-green/5 text-zk-green/60 hover:text-zk-green hover:bg-zk-green/12 hover:border-zk-green/40 transition-all"
               >
                 <Plus size={12} /> New Role
               </button>
@@ -682,8 +681,8 @@ function PermissionsTab() {
         <div className="flex items-center justify-between px-3 py-3 border-b border-zk-border/30 shrink-0">
           <div className="flex items-center gap-2">
             <Key size={12} className="text-zk-green" />
-            <span className="font-mono text-[11px] font-semibold text-zk-green tracking-widest">PERMISSIONS</span>
-            <span className="font-mono text-[9px] text-zk-muted/35">({perms.length})</span>
+            <span className="font-sans text-sm font-semibold text-zk-white">Permissions</span>
+            <span className="font-sans text-xs text-zk-muted/35">({perms.length})</span>
           </div>
           <div className="flex items-center gap-1">
             <button onClick={fetchPerms} className="p-1 text-zk-muted/35 hover:text-zk-green transition-colors">
@@ -691,7 +690,7 @@ function PermissionsTab() {
             </button>
             <button
               onClick={openCreate}
-              className="flex items-center gap-1 px-2 py-1 rounded-sm border font-mono text-[9px] text-zk-green border-zk-green/25 bg-zk-green/5 hover:bg-zk-green/12 hover:border-zk-green/50 transition-all"
+              className="flex items-center gap-1 px-2 py-1 rounded-sm border font-sans text-xs text-zk-green border-zk-green/25 bg-zk-green/5 hover:bg-zk-green/12 hover:border-zk-green/50 transition-all"
             >
               <Plus size={9} /> New
             </button>
@@ -724,14 +723,14 @@ function PermissionsTab() {
                       <div className="flex items-center gap-1.5 mb-0.5">
                         <Key size={9} className={isActive ? "text-zk-green/70" : "text-zk-muted/30"} />
                         <span className={cn(
-                          "font-mono text-[11px] tracking-widest truncate",
+                          "font-mono text-xs truncate",
                           isActive ? "text-zk-green" : "text-zk-white",
                         )}>
                           {perm.name}
                         </span>
                       </div>
                       {perm.description && (
-                        <p className="font-mono text-[10px] text-zk-muted/35 line-clamp-1 pl-4">
+                        <p className="font-sans text-xs text-zk-muted/35 line-clamp-1 pl-4">
                           {perm.description}
                         </p>
                       )}
@@ -743,7 +742,7 @@ function PermissionsTab() {
           {!loading && perms.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 gap-2">
               <Key size={18} className="text-zk-muted/15" />
-              <p className="font-mono text-[10px] text-zk-muted/25 tracking-widest">NO PERMISSIONS YET</p>
+              <p className="font-sans text-xs text-zk-muted/25">No permissions yet</p>
             </div>
           )}
         </div>
@@ -759,7 +758,7 @@ function PermissionsTab() {
               initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
               className={cn(
-                "shrink-0 flex items-center gap-2 px-5 py-2 border-b font-mono text-[11px]",
+                "shrink-0 flex items-center gap-2 px-5 py-2 border-b font-sans text-sm",
                 toast.type === "ok"
                   ? "border-zk-green/15 bg-zk-green/5 text-zk-green"
                   : "border-zk-red/15 bg-zk-red/5 text-zk-red",
@@ -786,8 +785,8 @@ function PermissionsTab() {
               <div className="shrink-0 flex items-center justify-between px-6 py-3 border-b border-zk-border/50 bg-zk-surface/15">
                 <div className="flex items-center gap-2">
                   <Key size={13} className="text-zk-green" />
-                  <span className="font-mono text-[11px] font-semibold text-zk-green tracking-widest">
-                    {mode === "create" ? "NEW PERMISSION" : mode === "edit" ? "EDIT PERMISSION" : selected?.name.toUpperCase()}
+                  <span className="font-sans text-sm font-semibold text-zk-white">
+                    {mode === "create" ? "New Permission" : mode === "edit" ? "Edit Permission" : selected?.name}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -795,14 +794,14 @@ function PermissionsTab() {
                     <>
                       <button
                         onClick={() => openEdit(selected)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border font-mono text-[10px] border-zk-border/50 text-zk-slate hover:text-zk-white hover:border-zk-green/30 transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border font-sans text-sm border-zk-border/50 text-zk-slate hover:text-zk-white hover:border-zk-green/30 transition-all"
                       >
                         <Edit3 size={11} /> Edit
                       </button>
                       <button
                         onClick={() => handleDelete(selected)}
                         disabled={deleting}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border font-mono text-[10px] border-zk-red/25 bg-zk-red/5 text-zk-red hover:bg-zk-red/12 hover:border-zk-red/50 disabled:opacity-40 transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border font-sans text-sm border-zk-red/25 bg-zk-red/5 text-zk-red hover:bg-zk-red/12 hover:border-zk-red/50 disabled:opacity-40 transition-all"
                       >
                         {deleting
                           ? <span className="w-3 h-3 border border-zk-red border-t-transparent rounded-full animate-spin" />
@@ -851,7 +850,7 @@ function PermissionsTab() {
                   ) : (
                     <div className="flex items-center gap-3">
                       <Key size={18} className="text-zk-green/50" />
-                      <span className="font-mono text-xl font-bold text-zk-white tracking-wider">{selected?.name}</span>
+                      <span className="font-mono text-xl font-bold text-zk-white">{selected?.name}</span>
                     </div>
                   )}
                 </div>
@@ -869,7 +868,7 @@ function PermissionsTab() {
                       />
                     </FieldWrap>
                   ) : (
-                    <p className="font-mono text-sm text-zk-slate leading-relaxed">
+                    <p className="font-sans text-sm text-zk-slate leading-relaxed">
                       {selected?.description || <span className="text-zk-muted/25 italic">No description</span>}
                     </p>
                   )}
@@ -881,12 +880,12 @@ function PermissionsTab() {
                     <SectionLabel>system</SectionLabel>
                     <div className="space-y-2">
                       <div className="grid grid-cols-[7rem_1fr] gap-2 py-2 border-b border-zk-border/10">
-                        <span className="font-mono text-[10px] text-zk-muted/35">Permission ID</span>
-                        <span className="font-mono text-[10px] text-zk-muted/50 break-all">{selected.id}</span>
+                        <span className="font-sans text-xs text-zk-muted/35">Permission ID</span>
+                        <span className="font-mono text-xs text-zk-muted/50 break-all">{selected.id}</span>
                       </div>
                       <div className="grid grid-cols-[7rem_1fr] gap-2 py-2 border-b border-zk-border/10">
-                        <span className="font-mono text-[10px] text-zk-muted/35">Created</span>
-                        <span className="font-mono text-[10px] text-zk-muted/50">
+                        <span className="font-sans text-xs text-zk-muted/35">Created</span>
+                        <span className="font-mono text-xs text-zk-muted/50">
                           {new Date(selected.created_at).toLocaleString()}
                         </span>
                       </div>
@@ -904,14 +903,14 @@ function PermissionsTab() {
                       else if (selected) openView(selected);
                       setToast(null);
                     }}
-                    className="font-mono text-[11px] text-zk-muted/40 hover:text-zk-slate transition-colors"
+                    className="font-sans text-sm text-zk-muted/40 hover:text-zk-slate transition-colors"
                   >
                     ← Cancel
                   </button>
                   <button
                     onClick={handleSave}
                     disabled={saving || !form.name.trim()}
-                    className="flex items-center gap-2 px-5 py-2 rounded-sm border font-mono text-xs tracking-wider border-zk-green/35 bg-zk-green/8 text-zk-green hover:bg-zk-green/18 hover:border-zk-green/60 disabled:opacity-40 disabled:pointer-events-none transition-all"
+                    className="flex items-center gap-2 px-5 py-2 rounded border font-sans text-sm font-medium border-zk-green/35 bg-zk-green/8 text-zk-green hover:bg-zk-green/18 hover:border-zk-green/60 disabled:opacity-40 disabled:pointer-events-none transition-all"
                   >
                     {saving
                       ? <span className="w-3 h-3 border border-zk-green border-t-transparent rounded-full animate-spin" />
@@ -931,12 +930,12 @@ function PermissionsTab() {
                 <Key size={24} className="text-zk-green/20" />
               </div>
               <div className="text-center space-y-1">
-                <p className="font-mono text-[11px] text-zk-muted/30 tracking-widest">SELECT A PERMISSION OR CREATE NEW</p>
-                <p className="font-mono text-[9px] text-zk-muted/20">granular access keys assigned to roles</p>
+                <p className="font-sans text-sm text-zk-muted/30">Select a permission or create new</p>
+                <p className="font-sans text-xs text-zk-muted/20">granular access keys assigned to roles</p>
               </div>
               <button
                 onClick={openCreate}
-                className="flex items-center gap-2 px-4 py-2 rounded-sm border font-mono text-xs border-zk-green/25 bg-zk-green/5 text-zk-green/60 hover:text-zk-green hover:bg-zk-green/12 hover:border-zk-green/40 transition-all"
+                className="flex items-center gap-2 px-4 py-2 rounded border font-sans text-sm font-medium border-zk-green/25 bg-zk-green/5 text-zk-green/60 hover:text-zk-green hover:bg-zk-green/12 hover:border-zk-green/40 transition-all"
               >
                 <Plus size={12} /> New Permission
               </button>
@@ -981,12 +980,12 @@ export default function IAMPage() {
       {/* ── Stats ribbon ───────────────────────────────────── */}
       <div className="shrink-0 flex items-center gap-3 px-5 h-8 border-b border-zk-border/40 bg-zk-surface/10">
         <Terminal size={10} className="text-zk-green/40 shrink-0" />
-        <span className="font-mono text-[10px] text-zk-muted/35 tracking-[0.2em]">IAM_CONTROL_PANEL</span>
+        <span className="font-sans text-xs text-zk-muted/40">IAM Control Panel</span>
         <span className="text-zk-border/60">·</span>
-        <span className="font-mono text-[10px] text-zk-muted/35">
+        <span className="font-sans text-xs text-zk-muted/35">
           {permsLoaded ? `${perms.length} permissions defined` : "loading..."}
         </span>
-        <div className="ml-auto font-mono text-[9px] text-zk-muted/25">ROOT_ACCESS required</div>
+        <div className="ml-auto font-sans text-xs text-zk-muted/25">Root access required</div>
       </div>
 
       {/* ── Tab bar ────────────────────────────────────────── */}
@@ -996,7 +995,7 @@ export default function IAMPage() {
             key={id}
             onClick={() => setActiveTab(id)}
             className={cn(
-              "flex items-center gap-2 px-4 py-2.5 border-b-2 font-mono text-[11px] tracking-widest",
+              "flex items-center gap-2 px-4 py-2.5 border-b-2 font-sans text-sm font-medium",
               "transition-all duration-150",
               activeTab === id
                 ? "border-zk-green text-zk-green"
@@ -1004,7 +1003,7 @@ export default function IAMPage() {
             )}
           >
             <Icon size={11} />
-            {label.toUpperCase()}
+            {label}
           </button>
         ))}
       </div>

@@ -39,9 +39,9 @@ function useUptime(startMs: number) {
 
 // ─── Status indicator ─────────────────────────────────────────
 const STATUS_CONFIG = {
-  ONLINE:  { color: "bg-zk-green shadow-glow-sm", label: "ONLINE",  icon: Wifi },
-  AWAY:    { color: "bg-zk-amber",                label: "AWAY",    icon: Clock },
-  OFFLINE: { color: "bg-zk-muted/40",             label: "OFFLINE", icon: WifiOff },
+  ONLINE:  { color: "bg-zk-green shadow-glow-sm", label: "Online",  icon: Wifi },
+  AWAY:    { color: "bg-zk-amber",                label: "Away",    icon: Clock },
+  OFFLINE: { color: "bg-zk-muted/40",             label: "Offline", icon: WifiOff },
 } as const;
 
 // ─── Data row ─────────────────────────────────────────────────
@@ -58,12 +58,12 @@ function DataRow({
 }) {
   return (
     <div className="flex items-start justify-between gap-4 py-2 border-b border-zk-border/40 last:border-0">
-      <span className="font-mono text-[10px] text-zk-muted/60 tracking-widest uppercase shrink-0">
+      <span className="font-sans text-xs text-zk-muted/50 shrink-0">
         {label}
       </span>
       <span
         className={cn(
-          "text-[11px] text-right break-all",
+          "text-sm text-right break-all",
           mono ? "font-mono" : "font-sans",
           accent ? "text-zk-green" : "text-zk-slate"
         )}
@@ -77,8 +77,8 @@ function DataRow({
 // ─── Section header ───────────────────────────────────────────
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <div className="font-mono text-[9px] text-zk-muted/40 tracking-[0.2em] uppercase mb-3">
-      // {children}
+    <div className="font-sans text-xs font-medium text-zk-muted/50 uppercase tracking-wide mb-3">
+      {children}
     </div>
   );
 }
@@ -151,8 +151,8 @@ export function ProfileDrawer({ open, profile, onClose }: ProfileDrawerProps) {
             <div className="flex items-center justify-between px-5 py-3 border-b border-zk-border shrink-0">
               <div className="flex items-center gap-2">
                 <Terminal size={13} className="text-zk-green" />
-                <span className="font-mono text-[11px] font-semibold text-zk-green tracking-[0.15em] uppercase">
-                  Identity Matrix
+                <span className="font-sans text-sm font-semibold text-zk-white">
+                  Profile
                 </span>
               </div>
               <button
@@ -171,9 +171,8 @@ export function ProfileDrawer({ open, profile, onClose }: ProfileDrawerProps) {
               <div className="flex flex-col items-center gap-3 px-5 py-8 border-b border-zk-border/50">
                 {/* Glowing initial */}
                 <div className={cn(
-                  "w-16 h-16 rounded-sm flex items-center justify-center relative",
-                  "border border-zk-green/40 bg-zk-green/8",
-                  "shadow-[0_0_24px_rgba(0,255,65,0.2),inset_0_0_12px_rgba(0,255,65,0.05)]"
+                  "w-16 h-16 rounded flex items-center justify-center relative",
+                  "border border-zk-green/30 bg-zk-green/[0.06]"
                 )}>
                   <span className="font-mono text-2xl font-bold text-zk-green text-glow select-none">
                     {initial}
@@ -191,12 +190,12 @@ export function ProfileDrawer({ open, profile, onClose }: ProfileDrawerProps) {
                 {/* Display name + username badge */}
                 <div className="text-center space-y-1.5">
                   {/* Display name — primary identity */}
-                  <div className="font-mono text-sm font-semibold text-zk-white tracking-wide">
+                  <div className="font-sans text-sm font-semibold text-zk-white">
                     {profile.displayName || profile.username}
                   </div>
                   {/* @username in green box */}
-                  <div className="inline-flex items-center px-2.5 py-0.5 rounded-sm border border-zk-green/35 bg-zk-green/10">
-                    <span className="font-mono text-[10px] text-zk-green tracking-widest">
+                  <div className="inline-flex items-center px-2.5 py-0.5 rounded border border-zk-green/30 bg-zk-green/[0.08]">
+                    <span className="font-mono text-xs text-zk-green">
                       @{profile.username}
                     </span>
                   </div>
@@ -222,12 +221,12 @@ export function ProfileDrawer({ open, profile, onClose }: ProfileDrawerProps) {
 
                 {/* Status row — special treatment */}
                 <div className="flex items-center justify-between gap-4 py-2 border-b border-zk-border/40">
-                  <span className="font-mono text-[10px] text-zk-muted/60 tracking-widest uppercase">
+                  <span className="font-sans text-xs text-zk-muted/50">
                     Status
                   </span>
                   <div className="flex items-center gap-1.5">
                     <span className={cn("w-1.5 h-1.5 rounded-full", status.color)} />
-                    <span className="font-mono text-[11px] text-zk-green">
+                    <span className="font-sans text-sm text-zk-green">
                       {status.label}
                     </span>
                   </div>
@@ -245,7 +244,7 @@ export function ProfileDrawer({ open, profile, onClose }: ProfileDrawerProps) {
                   {profile.accessFlags.map((flag) => (
                     <span
                       key={flag}
-                      className="font-mono text-[9px] text-zk-green border border-zk-green/20 bg-zk-green/5 rounded-sm px-2 py-0.5 tracking-widest"
+                      className="font-sans text-xs text-zk-green border border-zk-green/20 bg-zk-green/[0.05] rounded px-2 py-0.5"
                     >
                       {flag}
                     </span>
@@ -261,8 +260,8 @@ export function ProfileDrawer({ open, profile, onClose }: ProfileDrawerProps) {
                 disabled={terminating}
                 className={cn(
                   "w-full flex items-center justify-center gap-2",
-                  "font-mono text-xs tracking-wider",
-                  "h-9 rounded-sm border transition-all duration-150",
+                  "font-sans text-sm",
+                  "h-9 rounded border transition-all duration-150",
                   "border-zk-red/30 bg-zk-red/5 text-zk-red",
                   "hover:bg-zk-red/15 hover:border-zk-red/60",
                   "disabled:opacity-40 disabled:pointer-events-none"
@@ -272,10 +271,10 @@ export function ProfileDrawer({ open, profile, onClose }: ProfileDrawerProps) {
                   ? <span className="w-3 h-3 border border-zk-red border-t-transparent rounded-full animate-spin" />
                   : <LogOut size={13} />
                 }
-                {terminating ? "Terminating..." : "Terminate Session"}
+                {terminating ? "Signing out..." : "Sign Out"}
               </button>
-              <p className="mt-2 font-mono text-[9px] text-zk-muted/30 text-center tracking-widest">
-                SESSION · AES-256 · E2E ENCRYPTED
+              <p className="mt-2 font-sans text-xs text-zk-muted/25 text-center">
+                AES-256 end-to-end encrypted
               </p>
             </div>
           </motion.div>

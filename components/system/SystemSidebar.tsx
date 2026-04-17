@@ -61,12 +61,11 @@ function LockedItem({ label, icon: Icon }: { label: string; icon: React.ElementT
     >
       <div
         className={cn(
-          "flex items-center gap-2.5 px-3 py-2 rounded-sm",
-          "font-mono text-xs tracking-wide",
-          "border border-transparent",
+          "flex items-center gap-2.5 px-3 py-2 rounded",
+          "font-sans text-sm",
           "text-zk-muted/30 cursor-not-allowed select-none",
           "transition-all duration-150",
-          "hover:bg-zk-red/5 hover:border-zk-red/15"
+          "hover:bg-zk-red/5"
         )}
         aria-disabled="true"
       >
@@ -81,18 +80,18 @@ function LockedItem({ label, icon: Icon }: { label: string; icon: React.ElementT
       {tip && (
         <div className={cn(
           "absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50",
-          "whitespace-nowrap px-2.5 py-1.5 rounded-sm",
+          "whitespace-nowrap px-3 py-2 rounded",
           "bg-[rgba(10,15,10,0.98)] border border-zk-red/30",
           "shadow-[0_0_12px_rgba(255,59,59,0.15)]",
           "pointer-events-none"
         )}>
           <div className="flex items-center gap-1.5">
             <Lock size={9} className="text-zk-red" />
-            <span className="font-mono text-[9px] text-zk-red tracking-widest uppercase">
+            <span className="font-sans text-xs text-zk-red">
               Insufficient permissions
             </span>
           </div>
-          <p className="font-mono text-[9px] text-zk-muted/50 mt-0.5">
+          <p className="font-sans text-xs text-zk-muted/50 mt-0.5">
             You do not have access to this module
           </p>
           {/* Arrow */}
@@ -136,8 +135,8 @@ export function SystemSidebar() {
       "w-48 shrink-0 flex flex-col",
       "border-r border-zk-border bg-zk-surface/40"
     )}>
-      <div className="px-4 pt-5 pb-2">
-        <span className="font-mono text-[9px] text-zk-muted/60 tracking-[0.2em] uppercase">
+      <div className="px-4 pt-5 pb-3">
+        <span className="font-sans text-xs text-zk-muted/50 uppercase tracking-wide">
           Navigation
         </span>
       </div>
@@ -159,12 +158,12 @@ export function SystemSidebar() {
               key={href}
               href={href}
               className={cn(
-                "flex items-center gap-2.5 px-3 py-2 rounded-sm",
-                "font-mono text-xs tracking-wide",
+                "flex items-center gap-2.5 px-3 py-2 rounded",
+                "font-sans text-sm text-zk-white",
                 "transition-all duration-150",
                 active
-                  ? "bg-zk-green/8 text-zk-green border border-zk-border shadow-glow-sm"
-                  : "text-zk-slate border border-transparent hover:text-zk-white hover:bg-zk-green/5 hover:border-zk-border"
+                  ? "border-l-2 border-l-zk-green bg-zk-green/[0.06] text-zk-green pl-[10px]"
+                  : "text-zk-slate hover:text-zk-white hover:bg-zk-green/5"
               )}
               aria-current={active ? "page" : undefined}
             >
@@ -174,12 +173,12 @@ export function SystemSidebar() {
               <span className="flex-1">{label}</span>
 
               {showBadge && (
-                <span className="font-mono text-[9px] bg-zk-green text-zk-bg px-1.5 py-0.5 rounded-sm leading-none">
+                <span className="font-sans text-xs bg-zk-green text-zk-bg px-1.5 py-0.5 rounded leading-none">
                   {unread}
                 </span>
               )}
               {active && (
-                <span aria-hidden="true" className="w-1 h-1 rounded-full bg-zk-green shadow-glow-sm" />
+                <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-zk-green" />
               )}
             </Link>
           );
@@ -189,10 +188,10 @@ export function SystemSidebar() {
       {/* Founder indicator at bottom */}
       {founder && (
         <div className="mt-auto px-4 pb-4 pt-2">
-          <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-sm border border-zk-green/15 bg-zk-green/5">
+          <div className="flex items-center gap-1.5 px-2.5 py-2 rounded border border-zk-green/15 bg-zk-green/5">
             <ShieldBadge />
-            <span className="font-mono text-[9px] text-zk-green/60 tracking-widest">
-              FOUNDER
+            <span className="font-sans text-xs text-zk-green/70 uppercase tracking-wide">
+              Founder
             </span>
           </div>
         </div>
@@ -204,7 +203,7 @@ export function SystemSidebar() {
 // Small inline shield icon to avoid extra import
 function ShieldBadge() {
   return (
-    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
       className="text-zk-green shrink-0">
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />

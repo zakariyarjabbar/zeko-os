@@ -93,7 +93,7 @@ function SectionLabel({
 }) {
   return (
     <div className="flex items-center justify-between px-3 pt-5 pb-1.5">
-      <span className="font-mono text-[9px] text-zk-muted/40 tracking-[0.25em] uppercase">
+      <span className="font-sans text-xs text-zk-muted/50 uppercase tracking-wide">
         {children}
       </span>
       {action}
@@ -158,7 +158,7 @@ export function ChatSidebar({
       <div className="px-4 py-3 border-b border-zk-border/60 shrink-0">
         <div className="flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-zk-green shadow-glow-sm animate-pulse shrink-0" />
-          <span className="font-mono text-[10px] text-zk-green/70 tracking-[0.25em] uppercase">
+          <span className="font-sans text-xs text-zk-muted/60">
             Comms
           </span>
         </div>
@@ -179,13 +179,13 @@ export function ChatSidebar({
                 onClick={() => canView && onSelect(ch.id, "channel")}
                 disabled={!canView}
                 className={cn(
-                  "w-full flex items-center gap-2 px-2.5 py-2 rounded-sm text-left",
+                  "w-full flex items-center gap-2 px-2.5 py-2 rounded text-left",
                   "transition-all duration-150 group",
                   active
-                    ? "bg-zk-green/10 border border-zk-green/20 shadow-[inset_2px_0_0_#00FF41]"
+                    ? "border-l-2 border-l-zk-green bg-zk-green/[0.06]"
                     : canView
-                      ? "border border-transparent hover:bg-zk-green/5 hover:border-zk-border/60"
-                      : "border border-transparent opacity-35 cursor-not-allowed",
+                      ? "border-l-2 border-l-transparent hover:bg-zk-green/[0.03] hover:border-l-zk-green/30"
+                      : "border-l-2 border-l-transparent opacity-35 cursor-not-allowed",
                 )}
               >
                 {/* Icon */}
@@ -198,7 +198,7 @@ export function ChatSidebar({
 
                 {/* Label */}
                 <span className={cn(
-                  "font-mono text-[11px] tracking-wide truncate flex-1",
+                  "font-sans text-sm truncate flex-1",
                   active ? "text-zk-green" : "text-zk-slate"
                 )}>
                   {ch.label.replace("#", "")}
@@ -206,14 +206,14 @@ export function ChatSidebar({
 
                 {/* Unread badge */}
                 {ch.unread > 0 && !active && canView && (
-                  <span className="shrink-0 font-mono text-[9px] leading-none bg-zk-green text-zk-bg px-1.5 py-0.5 rounded-sm">
+                  <span className="shrink-0 font-sans text-xs leading-none bg-zk-green text-zk-bg px-1.5 py-0.5 rounded">
                     {ch.unread}
                   </span>
                 )}
 
                 {/* Members */}
                 {active && ch.memberCount > 0 && (
-                  <span className="shrink-0 font-mono text-[9px] text-zk-green/50">
+                  <span className="shrink-0 font-sans text-xs text-zk-green/50">
                     {ch.memberCount}
                   </span>
                 )}
@@ -228,8 +228,8 @@ export function ChatSidebar({
             <button
               onClick={() => setSearching((v) => !v)}
               className={cn(
-                "flex items-center gap-1 px-1.5 py-0.5 rounded-sm",
-                "font-mono text-[9px] tracking-wider transition-all",
+                "flex items-center gap-1 px-1.5 py-0.5 rounded",
+                "font-sans text-xs transition-all",
                 searching
                   ? "text-zk-green bg-zk-green/10 border border-zk-green/20"
                   : "text-zk-muted/40 hover:text-zk-green border border-transparent hover:border-zk-border/50"
@@ -246,7 +246,7 @@ export function ChatSidebar({
 
         {/* Search panel */}
         {searching && (
-          <div className="mx-2 mb-2 rounded-sm border border-zk-border/60 bg-zk-surface/60 overflow-hidden">
+          <div className="mx-2 mb-2 rounded border border-zk-border/60 bg-zk-surface/60 overflow-hidden">
             {/* Search input */}
             <div className="flex items-center gap-2 px-2.5 py-2 border-b border-zk-border/40">
               <Search size={10} className="text-zk-muted/50 shrink-0" />
@@ -258,7 +258,7 @@ export function ChatSidebar({
                 placeholder="username, name or email..."
                 className={cn(
                   "flex-1 bg-transparent outline-none",
-                  "font-mono text-[10px] text-zk-white placeholder:text-zk-muted/30",
+                  "font-sans text-sm text-zk-white placeholder:text-zk-muted/30",
                   "caret-zk-green"
                 )}
               />
@@ -270,7 +270,7 @@ export function ChatSidebar({
             {/* Results */}
             <div className="max-h-40 overflow-y-auto">
               {loadingSearch && (
-                <p className="font-mono text-[9px] text-zk-muted/40 px-3 py-2 animate-pulse">
+                <p className="font-sans text-xs text-zk-muted/40 px-3 py-2 animate-pulse">
                   Searching...
                 </p>
               )}
@@ -285,13 +285,13 @@ export function ChatSidebar({
                     STATUS_DOT[u.status] ?? STATUS_DOT.OFFLINE
                   )} />
                   <div className="min-w-0">
-                    <p className="font-mono text-[10px] text-zk-white truncate leading-tight">{u.name}</p>
-                    <p className="font-mono text-[9px] text-zk-muted/50 truncate">@{u.username}</p>
+                    <p className="font-sans text-sm text-zk-white truncate leading-tight">{u.name}</p>
+                    <p className="font-sans text-xs text-zk-muted/50 truncate">@{u.username}</p>
                   </div>
                 </button>
               ))}
               {query.length > 0 && !loadingSearch && results.length === 0 && (
-                <p className="font-mono text-[9px] text-zk-muted/30 px-3 py-2">No users found</p>
+                <p className="font-sans text-xs text-zk-muted/30 px-3 py-2">No users found</p>
               )}
             </div>
           </div>
@@ -300,7 +300,7 @@ export function ChatSidebar({
         {/* DM list */}
         {loadingDms ? <SkeletonDms /> : <div className="px-2 flex flex-col gap-px">
           {dmConvos.length === 0 && !searching && (
-            <p className="font-mono text-[9px] text-zk-muted/25 px-2.5 py-1.5 italic">
+            <p className="font-sans text-xs text-zk-muted/25 px-2.5 py-1.5 italic">
               No conversations yet
             </p>
           )}
@@ -311,11 +311,11 @@ export function ChatSidebar({
                 key={dm.userId}
                 onClick={() => onSelect(`dm:${dm.userId}`, "dm", dm.userId)}
                 className={cn(
-                  "w-full text-left px-2.5 py-2 rounded-sm",
+                  "w-full text-left px-2.5 py-2 rounded",
                   "transition-all duration-150",
                   active
-                    ? "bg-zk-green/10 border border-zk-green/20 shadow-[inset_2px_0_0_#00FF41]"
-                    : "border border-transparent hover:bg-zk-green/5 hover:border-zk-border/60"
+                    ? "border-l-2 border-l-zk-green bg-zk-green/[0.06]"
+                    : "border-l-2 border-l-transparent hover:bg-zk-green/[0.03] hover:border-l-zk-green/30"
                 )}
               >
                 {/* Top row: handle + time */}
@@ -329,7 +329,7 @@ export function ChatSidebar({
                         : "bg-zk-muted/30",
                     )} />
                     <span className={cn(
-                      "font-mono text-[11px] truncate",
+                      "font-sans text-sm truncate",
                       active ? "text-zk-green" : dm.unread > 0 ? "text-zk-white font-semibold" : "text-zk-slate"
                     )}>
                       {dm.handle}
@@ -337,12 +337,12 @@ export function ChatSidebar({
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {dm.unread > 0 && !active && (
-                      <span className="font-mono text-[9px] leading-none bg-zk-green text-zk-bg px-1 py-0.5 rounded-sm">
+                      <span className="font-sans text-xs leading-none bg-zk-green text-zk-bg px-1.5 py-0.5 rounded">
                         {dm.unread}
                       </span>
                     )}
                     {dm.lastTime && (
-                      <span className="font-mono text-[9px] text-zk-muted/30">
+                      <span className="font-sans text-xs text-zk-muted/30">
                         {relativeTime(dm.lastTime)}
                       </span>
                     )}
@@ -351,7 +351,7 @@ export function ChatSidebar({
                 {/* Last message preview */}
                 {dm.lastMsg && (
                   <p className={cn(
-                    "font-mono text-[10px] truncate pl-3.5",
+                    "font-sans text-sm truncate pl-3.5",
                     active ? "text-zk-green/50" : "text-zk-muted/40"
                   )}>
                     {dm.lastMsg}
@@ -365,8 +365,8 @@ export function ChatSidebar({
 
       {/* ── Footer ────────────────────────────────────────── */}
       <div className="shrink-0 px-4 py-2.5 border-t border-zk-border/40">
-        <span className="font-mono text-[9px] text-zk-muted/25 tracking-widest">
-          AES-256 · E2E ENCRYPTED
+        <span className="font-sans text-xs text-zk-muted/20">
+          AES-256 encrypted
         </span>
       </div>
     </aside>

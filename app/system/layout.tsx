@@ -14,8 +14,9 @@ import { SystemHeader }      from "@/components/system/SystemHeader";
 import { SessionProvider }   from "@/components/system/SessionContext";
 import { PresenceTracker }   from "@/components/system/PresenceTracker";
 import { DisplayNameGate }   from "@/components/system/DisplayNameGate";
-import { ShellPrefetcher }   from "@/components/system/ShellPrefetcher";
-import type { UserProfile }  from "@/lib/profile";
+import { ShellPrefetcher }        from "@/components/system/ShellPrefetcher";
+import { AccessRevokedOverlay }   from "@/components/system/AccessRevokedOverlay";
+import type { UserProfile }       from "@/lib/profile";
 import { asUserId }          from "@/lib/types/ids";
 
 // Fallback profile when DB is unreachable
@@ -61,6 +62,8 @@ export default async function SystemLayout({
       <ShellPrefetcher accessFlags={profile.accessFlags} />
       {/* Blocking gate — renders only when display_name is empty */}
       <DisplayNameGate initialDisplayName={profile.displayName} />
+      {/* Live permission-revoke notification — appears without page refresh */}
+      <AccessRevokedOverlay />
       <div className="fixed inset-0 flex flex-col bg-zk-bg overflow-hidden">
         <SystemHeader profile={profile} session={session} />
         <div className="flex flex-1 overflow-hidden">

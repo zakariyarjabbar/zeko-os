@@ -85,8 +85,8 @@ export function DisplayNameGate({ initialDisplayName }: DisplayNameGateProps) {
           transition={{ type: "spring", stiffness: 340, damping: 28, delay: 0.05 }}
           className={cn(
             "w-full max-w-sm",
-            "bg-[rgba(10,15,10,0.98)] border border-zk-border rounded-sm",
-            "shadow-[0_0_60px_rgba(0,0,0,0.8),0_0_30px_rgba(0,255,65,0.08)]",
+            "bg-[rgba(10,15,10,0.98)] border border-zk-border rounded",
+            "shadow-[0_0_60px_rgba(0,0,0,0.8)]",
             "overflow-hidden"
           )}
         >
@@ -97,17 +97,16 @@ export function DisplayNameGate({ initialDisplayName }: DisplayNameGateProps) {
             {/* Icon + heading */}
             <div className="flex flex-col items-center text-center gap-3">
               <div className={cn(
-                "w-12 h-12 rounded-sm flex items-center justify-center",
-                "border border-zk-green/30 bg-zk-green/8",
-                "shadow-[0_0_20px_rgba(0,255,65,0.15)]"
+                "w-12 h-12 rounded flex items-center justify-center",
+                "border border-zk-green/30 bg-zk-green/8"
               )}>
                 <UserCheck size={20} className="text-zk-green" />
               </div>
               <div>
-                <h2 className="font-mono text-base font-semibold text-zk-white tracking-tight">
+                <h2 className="font-sans text-base font-semibold text-zk-white">
                   Identity Required
                 </h2>
-                <p className="mt-1 font-mono text-[11px] text-zk-muted leading-relaxed">
+                <p className="mt-1 font-sans text-sm text-zk-muted leading-relaxed">
                   You must set a display name before accessing the system.
                 </p>
               </div>
@@ -119,21 +118,15 @@ export function DisplayNameGate({ initialDisplayName }: DisplayNameGateProps) {
                 <div className="flex items-baseline justify-between">
                   <label
                     htmlFor="gate-display-name"
-                    className="font-mono text-[11px] text-zk-muted tracking-widest uppercase"
+                    className="font-sans text-xs font-medium text-zk-muted/60 uppercase tracking-wide"
                   >
                     Display Name
                   </label>
-                  <span className="font-mono text-[10px] text-zk-muted/40">
+                  <span className="font-sans text-xs text-zk-muted/40">
                     letters, numbers, one space
                   </span>
                 </div>
                 <div className="relative">
-                  <span
-                    aria-hidden="true"
-                    className="absolute left-3 top-1/2 -translate-y-1/2 font-mono text-zk-green text-sm select-none"
-                  >
-                    &gt;
-                  </span>
                   <input
                     id="gate-display-name"
                     type="text"
@@ -144,9 +137,9 @@ export function DisplayNameGate({ initialDisplayName }: DisplayNameGateProps) {
                     autoFocus
                     autoComplete="off"
                     className={cn(
-                      "w-full pl-8 pr-4 py-2.5",
-                      "bg-zk-surface/60 border border-zk-border rounded-sm",
-                      "font-mono text-sm text-zk-white placeholder:text-zk-muted/50",
+                      "w-full pl-4 pr-4 py-2.5",
+                      "bg-zk-surface/60 border border-zk-border rounded",
+                      "font-sans text-sm text-zk-white placeholder:text-zk-muted/50",
                       "outline-none transition-all duration-200",
                       "focus:border-zk-green focus:shadow-glow-sm",
                       "disabled:opacity-40 disabled:cursor-not-allowed",
@@ -158,7 +151,7 @@ export function DisplayNameGate({ initialDisplayName }: DisplayNameGateProps) {
 
               {/* Error */}
               {error && (
-                <div className="flex items-start gap-2 px-3 py-2.5 rounded-sm border border-zk-red/30 bg-zk-red/5 text-zk-red font-mono text-xs">
+                <div className="flex items-start gap-2 px-3 py-2.5 rounded border border-zk-red/30 bg-zk-red/5 text-zk-red font-sans text-sm">
                   <AlertTriangle size={13} className="shrink-0 mt-0.5" />
                   <span>{error}</span>
                 </div>
@@ -168,7 +161,7 @@ export function DisplayNameGate({ initialDisplayName }: DisplayNameGateProps) {
                 type="submit"
                 disabled={loading}
                 className={cn(
-                  "w-full h-9 rounded-sm border font-mono text-xs tracking-widest",
+                  "w-full h-9 rounded border font-sans text-sm font-medium",
                   "flex items-center justify-center gap-2 transition-all duration-150",
                   "border-zk-green/40 bg-zk-green/10 text-zk-green",
                   "hover:bg-zk-green/20 hover:border-zk-green/70 hover:shadow-glow-sm",

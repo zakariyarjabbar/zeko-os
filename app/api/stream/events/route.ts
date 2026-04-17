@@ -71,6 +71,9 @@ export async function GET(req: NextRequest) {
   // ── Permission snapshot (taken once at connection time) ────
   const flags      = await getEffectiveFlags(asUserId(sessionId));
   const watchInbox = canViewInbox(flags);
+  // Snapshot of effective flags — compared each poll to detect permission changes.
+  // Covers role assignment, role permission edits, and direct access_flags changes.
+  let flagsSnapshot = [...flags].sort().join(",");
 
   // ── Presence watch list ────────────────────────────────────
   // Parse ?watch=uuid1,uuid2,...  Validate every entry as a UUID
@@ -164,6 +167,19 @@ export async function GET(req: NextRequest) {
                 presenceSnapshot[uid] = current;
                 controller.enqueue(eventData("presence", { userId: uid, status: current }));
               }
+            }
+          }
+
+          // ── Permission/role changes for this user ─────────────
+          // Re-computes effective flags (own flags ∪ role permissions) and
+          // signals the client only when the set actually changes, covering
+          // role assignment, role permission edits, and direct flag changes.
+          if (!closed) {
+            const updatedFlags = await getEffectiveFlags(asUserId(sessionId));
+            const updatedHash  = [...updatedFlags].sort().join(",");
+            if (updatedHash !== flagsSnapshot) {
+              flagsSnapshot = updatedHash;
+              controller.enqueue(signal("flags"));
             }
           }
 

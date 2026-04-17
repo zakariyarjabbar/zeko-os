@@ -115,7 +115,7 @@ function SystemLine({ msg }: { msg: ChatMessage }) {
   return (
     <div className="flex items-center gap-3 py-2 my-1">
       <div className="flex-1 h-px bg-zk-amber/15" />
-      <span className="font-mono text-[10px] text-zk-amber/50 tracking-wider px-2">
+      <span className="font-sans text-xs text-zk-amber/50 px-2">
         *** {msg.text}
       </span>
       <div className="flex-1 h-px bg-zk-amber/15" />
@@ -146,7 +146,7 @@ function MessageGroupBlock({
         onClick={onAvatarClick}
         aria-label={`View ${displayName}'s profile`}
         className={cn(
-          "w-7 h-7 rounded-sm shrink-0 flex items-center justify-center mt-0.5",
+          "w-7 h-7 rounded shrink-0 flex items-center justify-center mt-0.5",
           "border text-[11px] font-mono font-bold select-none",
           "transition-opacity duration-100 hover:opacity-75 cursor-pointer",
           color,
@@ -163,14 +163,14 @@ function MessageGroupBlock({
           <button
             onClick={onAvatarClick}
             className={cn(
-              "font-mono text-[12px] font-semibold leading-none cursor-pointer",
+              "font-sans text-sm font-semibold leading-none cursor-pointer",
               "hover:underline underline-offset-2 transition-opacity hover:opacity-80",
               isOwnGroup ? "text-zk-green" : "text-zk-white"
             )}
           >
             {displayName}
           </button>
-          <span className="font-mono text-[10px] text-zk-muted/40 select-none">
+          <span className="font-sans text-xs text-zk-muted/40 select-none">
             {shortTime(group.timestamp)}
           </span>
         </div>
@@ -191,7 +191,7 @@ function MessageGroupBlock({
 
             {/* Per-message hover actions */}
             <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover/msg:opacity-100 transition-opacity duration-100">
-              <span className="font-mono text-[9px] text-zk-muted/30 select-none">
+              <span className="font-sans text-xs text-zk-muted/30 select-none">
                 {msg.timestamp}
               </span>
               {canDelete && !msg.id.startsWith("opt-") && (
@@ -216,7 +216,7 @@ function DateSeparator({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3 my-3">
       <div className="flex-1 h-px bg-zk-border/40" />
-      <span className="font-mono text-[9px] text-zk-muted/35 tracking-[0.2em] uppercase select-none px-1">
+      <span className="font-sans text-xs text-zk-muted/35 uppercase tracking-wide select-none px-1">
         {label}
       </span>
       <div className="flex-1 h-px bg-zk-border/40" />
@@ -364,9 +364,9 @@ export function MessageLog({
   if (messages.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-2">
-        <span className="font-mono text-3xl text-zk-border select-none">⬚</span>
-        <span className="font-mono text-[10px] text-zk-muted/30 tracking-widest">
-          NO MESSAGES
+        <span className="text-3xl text-zk-border select-none">⬚</span>
+        <span className="font-sans text-sm text-zk-muted/30">
+          No messages
         </span>
       </div>
     );

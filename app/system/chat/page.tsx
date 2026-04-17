@@ -189,6 +189,18 @@ export default function ChatPage() {
     return () => window.removeEventListener("zk:cache:dm", onDmCacheUpdate);
   }, []); // stable — reads state via refs
 
+  // ── Sync channels when permission flags change ─────────────
+  // ShellPrefetcher dispatches "zk:cache:channels" after re-fetching channels
+  // in response to a "flags" SSE event (role/permission change).
+  useEffect(() => {
+    function onChannelsCacheUpdate() {
+      const cached = getChatCache().getChannels();
+      if (cached) setChannels(cached);
+    }
+    window.addEventListener("zk:cache:channels", onChannelsCacheUpdate);
+    return () => window.removeEventListener("zk:cache:channels", onChannelsCacheUpdate);
+  }, []);
+
   // ── Hydrate + initial load ─────────────────────────────────
   //
   // hydrate() populates the in-memory cache from sessionStorage so that
@@ -749,7 +761,7 @@ export default function ChatPage() {
         )}>
           {/* Channel / DM name */}
           <div className="flex items-center gap-2 min-w-0">
-            <span className="font-mono text-sm font-semibold text-zk-white tracking-wide truncate">
+            <span className="font-sans text-sm font-semibold text-zk-white truncate">
               {headerLabel}
             </span>
             {loadingMsgs && (
@@ -762,7 +774,7 @@ export default function ChatPage() {
           )}
 
           {headerTopic && (
-            <span className="font-mono text-[11px] text-zk-muted/50 truncate flex-1 min-w-0">
+            <span className="font-sans text-sm text-zk-muted/50 truncate flex-1 min-w-0">
               {headerTopic}
             </span>
           )}
@@ -771,7 +783,7 @@ export default function ChatPage() {
           {!isDm && memberCount > 0 && (
             <div className="shrink-0 flex items-center gap-1.5 ml-auto">
               <Wifi size={11} className="text-zk-green/50" />
-              <span className="font-mono text-[10px] text-zk-muted/50">
+              <span className="font-sans text-xs text-zk-muted/50">
                 {memberCount} online
               </span>
             </div>
@@ -786,7 +798,7 @@ export default function ChatPage() {
                   ? "bg-zk-green shadow-glow-sm"
                   : "bg-zk-muted/30",
               )} />
-              <span className="font-mono text-[10px] text-zk-muted/50">
+              <span className="font-sans text-xs text-zk-muted/50">
                 {presence[activeDmUser] === "ONLINE" ? "online" : "offline"}
               </span>
             </div>
@@ -799,8 +811,8 @@ export default function ChatPage() {
             <div className="w-12 h-12 rounded-sm border border-zk-red/20 bg-zk-red/5 flex items-center justify-center">
               <span className="font-mono text-xl text-zk-red/40">⊘</span>
             </div>
-            <p className="font-mono text-xs text-zk-red/50 tracking-widest">ACCESS DENIED</p>
-            <p className="font-mono text-[10px] text-zk-muted/30 max-w-xs text-center">
+            <p className="font-sans text-sm text-zk-red/50">Access Denied</p>
+            <p className="font-sans text-sm text-zk-muted/30 max-w-xs text-center">
               You do not have the{" "}
               <span className="text-zk-muted/50">view:{activeChannel}</span> permission.
             </p>

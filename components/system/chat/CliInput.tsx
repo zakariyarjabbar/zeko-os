@@ -64,11 +64,11 @@ export function CliInput({ channelLabel, username, onSend, disabled }: CliInputP
       <div className="flex items-center gap-0 px-4 py-2.5">
         {/* Prompt */}
         <div className="flex items-center gap-1.5 shrink-0 mr-3 select-none">
-          <span className="font-mono text-[11px] text-zk-green/60">
+          <span className="font-sans text-sm text-zk-muted/50">
             {username}
           </span>
           <span className={cn(
-            "font-mono text-[13px] transition-colors",
+            "text-[13px] transition-colors",
             focused ? "text-zk-green" : "text-zk-muted/40"
           )}>
             ▸
@@ -93,7 +93,7 @@ export function CliInput({ channelLabel, username, onSend, disabled }: CliInputP
           placeholder={focused ? "" : `Message ${channelLabel}...`}
           className={cn(
             "flex-1 bg-transparent outline-none border-none",
-            "font-mono text-[12px] text-zk-white caret-zk-green",
+            "font-sans text-sm text-zk-white caret-zk-green",
             "placeholder:text-zk-muted/25",
             "disabled:opacity-40 disabled:cursor-not-allowed"
           )}
@@ -104,7 +104,7 @@ export function CliInput({ channelLabel, username, onSend, disabled }: CliInputP
           {/* Char counter — only when typing */}
           {hasContent && (
             <span className={cn(
-              "font-mono text-[9px] tabular-nums transition-colors",
+              "font-sans text-xs tabular-nums transition-colors",
               overLimit  ? "text-zk-red"      :
               nearLimit  ? "text-zk-amber/70"  :
                            "text-zk-muted/30"
@@ -119,7 +119,7 @@ export function CliInput({ channelLabel, username, onSend, disabled }: CliInputP
             disabled={!hasContent || disabled || overLimit}
             aria-label="Send message"
             className={cn(
-              "p-1.5 rounded-sm border transition-all duration-150",
+              "p-1.5 rounded border transition-all duration-150",
               hasContent && !overLimit
                 ? "border-zk-green/30 text-zk-green bg-zk-green/8 hover:bg-zk-green/15 hover:border-zk-green/60"
                 : "border-transparent text-zk-muted/20 pointer-events-none",
@@ -132,8 +132,8 @@ export function CliInput({ channelLabel, username, onSend, disabled }: CliInputP
 
       {/* Footer hint */}
       <div className="px-4 pb-2 flex items-center gap-3">
-        <span className="font-mono text-[9px] text-zk-muted/20 tracking-widest select-none">
-          ENTER to send &nbsp;·&nbsp; ESC to cancel &nbsp;·&nbsp; E2E encrypted
+        <span className="font-sans text-xs text-zk-muted/20 select-none">
+          Enter to send  ·  Esc to cancel
         </span>
       </div>
     </div>

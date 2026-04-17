@@ -83,6 +83,15 @@ async function prefetchRoles(): Promise<void> {
   } catch { /* silent */ }
 }
 
+async function refetchFlags(): Promise<Permission[] | null> {
+  try {
+    const res = await fetch("/api/profile");
+    if (!res.ok) return null;
+    const { accessFlags } = await res.json() as { accessFlags: Permission[] };
+    return Array.isArray(accessFlags) ? accessFlags : null;
+  } catch { return null; }
+}
+
 async function prefetchPermissions(): Promise<void> {
   const cache = getAppCache();
   if (cache.isPermissionsFresh()) return;
@@ -163,6 +172,23 @@ export function ShellPrefetcher({ accessFlags }: ShellPrefetcherProps) {
           getChatCache().setPresence({ [userId]: status });
           window.dispatchEvent(new CustomEvent("zk:cache:presence"));
         } catch { /* malformed payload — ignore */ }
+      });
+
+      // ── Permission/role change for the current user ───────────────────────
+      // Server emits this signal when effective flags change (role assigned,
+      // role permissions edited, or direct access_flags change).
+      // Re-fetch flags → update SessionContext → re-fetch channels (access may differ).
+      es.addEventListener("flags", () => {
+        refetchFlags().then((newFlags) => {
+          if (!newFlags) return;
+          window.dispatchEvent(new CustomEvent("zk:flags:updated", { detail: newFlags }));
+          // Channel permissions are derived from access flags — invalidate so
+          // the chat sidebar reflects the new access immediately.
+          getChatCache().invalidateChannels();
+          prefetchChannels().then(() => {
+            window.dispatchEvent(new CustomEvent("zk:cache:channels"));
+          }).catch(() => { /* silent */ });
+        }).catch(() => { /* silent */ });
       });
     }
 

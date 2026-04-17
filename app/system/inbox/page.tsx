@@ -51,23 +51,23 @@ function MessageItem({
             : <Mail size={11} className="text-zk-green shrink-0" />
           }
           <span className={cn(
-            "font-mono text-[11px] truncate",
+            "font-sans text-sm truncate",
             msg.read ? "text-zk-slate" : "text-zk-white font-semibold"
           )}>
             {msg.name}
           </span>
         </div>
-        <span className="font-mono text-[9px] text-zk-muted/50 shrink-0 mt-0.5">
+        <span className="font-sans text-xs text-zk-muted/50 shrink-0 mt-0.5">
           {new Date(msg.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
         </span>
       </div>
       <p className={cn(
-        "font-mono text-[10px] truncate",
+        "font-sans text-sm truncate",
         msg.read ? "text-zk-muted/60" : "text-zk-slate"
       )}>
         {msg.subject}
       </p>
-      <p className="font-mono text-[10px] text-zk-muted/40 truncate mt-0.5">
+      <p className="font-sans text-xs text-zk-muted/40 truncate mt-0.5">
         {msg.email}
       </p>
     </button>
@@ -191,10 +191,10 @@ export default function InboxPage() {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4">
         <Inbox size={32} className="text-zk-muted/30" />
-        <p className="font-mono text-xs text-zk-muted/50 tracking-widest">NO MESSAGES</p>
+        <p className="font-sans text-sm text-zk-muted/50">No messages</p>
         <button
           onClick={() => fetchMessages(true)}
-          className="flex items-center gap-1.5 font-mono text-[10px] text-zk-muted/50 hover:text-zk-green transition-colors"
+          className="flex items-center gap-1.5 font-sans text-xs text-zk-muted/50 hover:text-zk-green transition-colors"
         >
           <RefreshCw size={11} /> Refresh
         </button>
@@ -212,11 +212,11 @@ export default function InboxPage() {
         <div className="flex items-center justify-between px-4 py-3 border-b border-zk-border shrink-0">
           <div className="flex items-center gap-2">
             <Mail size={13} className="text-zk-green" />
-            <span className="font-mono text-[11px] font-semibold text-zk-green tracking-widest uppercase">
+            <span className="font-sans text-sm font-semibold text-zk-white">
               Inbox
             </span>
             {unread > 0 && (
-              <span className="font-mono text-[9px] bg-zk-green text-zk-bg px-1.5 py-0.5 rounded-sm">
+              <span className="font-sans text-xs bg-zk-green text-zk-bg px-1.5 py-0.5 rounded">
                 {unread}
               </span>
             )}
@@ -267,17 +267,17 @@ export default function InboxPage() {
               <div className="shrink-0 px-6 py-4 border-b border-zk-border bg-zk-surface/20">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <h2 className="font-mono text-sm font-semibold text-zk-white truncate mb-1">
+                    <h2 className="font-sans text-sm font-semibold text-zk-white truncate mb-1">
                       {selected.subject}
                     </h2>
                     <div className="flex items-center gap-3 flex-wrap">
-                      <span className="font-mono text-[11px] text-zk-green">
+                      <span className="font-sans text-sm text-zk-muted/80">
                         {selected.name}
                       </span>
-                      <span className="font-mono text-[11px] text-zk-muted/60">
+                      <span className="font-mono text-sm text-zk-muted/60">
                         &lt;{selected.email}&gt;
                       </span>
-                      <span className="font-mono text-[10px] text-zk-muted/40">
+                      <span className="font-sans text-xs text-zk-muted/40">
                         {formatDate(selected.created_at)}
                       </span>
                     </div>
@@ -289,8 +289,8 @@ export default function InboxPage() {
                       onClick={() => handleDelete(selected.id)}
                       disabled={deleting}
                       className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 rounded-sm border",
-                        "font-mono text-[10px] tracking-wider shrink-0",
+                        "flex items-center gap-1.5 px-3 py-1.5 rounded border",
+                        "font-sans text-sm shrink-0",
                         "border-zk-red/30 bg-zk-red/5 text-zk-red",
                         "hover:bg-zk-red/15 hover:border-zk-red/60",
                         "disabled:opacity-40 disabled:pointer-events-none",
@@ -309,17 +309,17 @@ export default function InboxPage() {
 
               {/* Message body */}
               <div className="flex-1 overflow-y-auto px-6 py-5">
-                <div className="font-mono text-[9px] text-zk-muted/40 tracking-[0.2em] uppercase mb-3">
-                  // Message Payload
+                <div className="font-sans text-xs font-medium text-zk-muted/50 uppercase tracking-wide mb-3">
+                  Message
                 </div>
-                <div className="font-mono text-sm text-zk-slate leading-relaxed whitespace-pre-wrap border border-zk-border/30 rounded-sm bg-zk-surface/20 px-5 py-4">
+                <div className="font-sans text-sm text-zk-slate leading-relaxed whitespace-pre-wrap border border-zk-border/30 rounded bg-zk-surface/20 px-5 py-4">
                   {selected.message}
                 </div>
 
                 {/* Reply area — inbox-manager only */}
                 {canManage && <div className="mt-6">
-                  <div className="font-mono text-[9px] text-zk-muted/40 tracking-[0.2em] uppercase mb-3">
-                    // Reply Transmission → {selected.email}
+                  <div className="font-sans text-xs font-medium text-zk-muted/50 uppercase tracking-wide mb-3">
+                    Reply to {selected.email}
                   </div>
 
                   {/* Reply status */}
@@ -327,7 +327,7 @@ export default function InboxPage() {
                     {replyStatus === "ok" && (
                       <motion.div
                         initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                        className="flex items-center gap-2 mb-3 px-3 py-2 rounded-sm border border-zk-green/20 bg-zk-green/5 font-mono text-[11px] text-zk-green"
+                        className="flex items-center gap-2 mb-3 px-3 py-2 rounded-sm border border-zk-green/20 bg-zk-green/5 font-sans text-sm text-zk-green"
                       >
                         <CheckCircle2 size={12} /> Email sent to {selected.email}
                       </motion.div>
@@ -335,7 +335,7 @@ export default function InboxPage() {
                     {replyStatus === "err" && (
                       <motion.div
                         initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                        className="flex items-center gap-2 mb-3 px-3 py-2 rounded-sm border border-zk-red/20 bg-zk-red/5 font-mono text-[11px] text-zk-red"
+                        className="flex items-center gap-2 mb-3 px-3 py-2 rounded-sm border border-zk-red/20 bg-zk-red/5 font-sans text-sm text-zk-red"
                       >
                         <AlertCircle size={12} /> Failed to send. Try again.
                       </motion.div>
@@ -343,17 +343,17 @@ export default function InboxPage() {
                     {replyStatus === "no-key" && (
                       <motion.div
                         initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                        className="flex items-center gap-2 mb-3 px-3 py-2 rounded-sm border border-zk-amber/20 bg-zk-amber/5 font-mono text-[11px] text-zk-amber"
+                        className="flex items-center gap-2 mb-3 px-3 py-2 rounded-sm border border-zk-amber/20 bg-zk-amber/5 font-sans text-sm text-zk-amber"
                       >
                         <AlertCircle size={12} /> Add RESEND_API_KEY to .env.local to enable email replies.
                       </motion.div>
                     )}
                   </AnimatePresence>
 
-                  <div className="border border-zk-border/40 rounded-sm bg-zk-surface/20 overflow-hidden focus-within:border-zk-green/40 transition-colors">
+                  <div className="border border-zk-border/40 rounded bg-zk-surface/20 overflow-hidden focus-within:border-zk-green/40 transition-colors">
                     <div className="flex items-center gap-2 px-3 py-2 border-b border-zk-border/30">
-                      <span className="font-mono text-[10px] text-zk-green/60 select-none">
-                        reply@zeko:~$
+                      <span className="font-sans text-xs text-zk-muted/40 select-none">
+                        Reply
                       </span>
                     </div>
                     <textarea
@@ -363,7 +363,7 @@ export default function InboxPage() {
                       placeholder="Type your reply..."
                       className={cn(
                         "w-full bg-transparent px-4 py-3 outline-none resize-none",
-                        "font-mono text-sm text-zk-white leading-relaxed",
+                        "font-sans text-sm text-zk-white leading-relaxed",
                         "placeholder:text-zk-muted/30"
                       )}
                       spellCheck={false}
@@ -375,8 +375,8 @@ export default function InboxPage() {
                       onClick={handleReply}
                       disabled={sending || !replyText.trim()}
                       className={cn(
-                        "flex items-center gap-2 px-4 py-2 rounded-sm border",
-                        "font-mono text-xs tracking-wider",
+                        "flex items-center gap-2 px-4 py-2 rounded border",
+                        "font-sans text-sm font-medium",
                         "border-zk-green/40 bg-zk-green/8 text-zk-green",
                         "hover:bg-zk-green/15 hover:border-zk-green",
                         "disabled:opacity-40 disabled:pointer-events-none",
@@ -395,8 +395,8 @@ export default function InboxPage() {
                 {/* View-only notice for non-managers */}
                 {!canManage && (
                   <div className="mt-6 px-4 py-3 rounded-sm border border-dashed border-zk-border/40">
-                    <p className="font-mono text-[10px] text-zk-muted/40 tracking-widest text-center">
-                      VIEW ONLY — inbox-manager permission required to reply or delete
+                    <p className="font-sans text-sm text-zk-muted/40 text-center">
+                      Read only — inbox-manager permission required to reply or delete
                     </p>
                   </div>
                 )}
@@ -409,8 +409,8 @@ export default function InboxPage() {
               className="flex-1 flex flex-col items-center justify-center gap-3"
             >
               <MailOpen size={28} className="text-zk-muted/20" />
-              <p className="font-mono text-[11px] text-zk-muted/40 tracking-widest">
-                SELECT A MESSAGE
+              <p className="font-sans text-sm text-zk-muted/40">
+                Select a message
               </p>
             </motion.div>
           )}

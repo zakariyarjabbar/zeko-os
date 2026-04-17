@@ -80,7 +80,7 @@ function Field({ label, children, required }: {
 }) {
   return (
     <div>
-      <label className="block font-mono text-[10px] text-zk-muted/50 tracking-widest uppercase mb-1.5">
+      <label className="block font-sans text-xs text-zk-muted/50 uppercase tracking-wide mb-1.5">
         {label}{required && <span className="text-zk-green ml-1">*</span>}
       </label>
       {children}
@@ -98,8 +98,8 @@ function TextInput({ value, onChange, placeholder, type = "text", disabled }: {
       placeholder={placeholder} disabled={disabled}
       autoComplete="off" spellCheck={false}
       className={cn(
-        "w-full px-3 py-2 rounded-sm border bg-zk-surface/60 border-zk-border",
-        "font-mono text-xs text-zk-white placeholder:text-zk-muted/30",
+        "w-full px-3 py-2 rounded border bg-zk-surface/60 border-zk-border",
+        "font-sans text-sm text-zk-white placeholder:text-zk-muted/30",
         "outline-none focus:border-zk-green/50 transition-colors",
         "disabled:opacity-40 disabled:cursor-not-allowed",
       )}
@@ -109,8 +109,7 @@ function TextInput({ value, onChange, placeholder, type = "text", disabled }: {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="flex items-center gap-1.5 font-mono text-[9px] text-zk-muted/35 tracking-[0.22em] uppercase mb-3">
-      <span className="text-zk-green/35">//</span>
+    <p className="flex items-center gap-1.5 font-sans text-xs text-zk-muted/50 uppercase tracking-wide mb-3">
       {children}
     </p>
   );
@@ -119,8 +118,8 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 function DRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="grid grid-cols-[8rem_1fr] items-start gap-2 py-2 border-b border-zk-border/10 last:border-0">
-      <span className="font-mono text-[10px] text-zk-muted/40 pt-px">{label}</span>
-      <span className="font-mono text-[11px] text-zk-white leading-snug break-all">{value}</span>
+      <span className="font-sans text-xs text-zk-muted/40 pt-px">{label}</span>
+      <span className="font-sans text-sm text-zk-white leading-snug break-all">{value}</span>
     </div>
   );
 }
@@ -132,7 +131,7 @@ function StatusBadge({ status }: { status: string }) {
       : "border-zk-muted/20 bg-transparent text-zk-muted/50";
   return (
     <span className={cn(
-      "inline-flex items-center gap-1.5 font-mono text-[9px] tracking-widest",
+      "inline-flex items-center gap-1.5 font-sans text-xs",
       "px-2 py-0.5 rounded-sm border", cls,
     )}>
       <span className={cn("w-1.5 h-1.5 rounded-full", STATUS_DOT[status] ?? STATUS_DOT.OFFLINE)} />
@@ -148,7 +147,7 @@ function FlagChip({ flag, active, onClick }: { flag: string; active: boolean; on
       onClick={onClick}
       disabled={!onClick}
       className={cn(
-        "font-mono text-[9px] px-2.5 py-1 rounded-sm border tracking-widest transition-all duration-150",
+        "font-sans text-xs px-2.5 py-1 rounded border transition-all duration-150",
         "disabled:pointer-events-none",
         active
           ? "border-zk-green/50 bg-zk-green/12 text-zk-green"
@@ -370,18 +369,18 @@ export default function UsersPage() {
       {/* ── Stats ribbon ───────────────────────────────────── */}
       <div className="shrink-0 flex items-center gap-3 px-5 h-8 border-b border-zk-border/40 bg-zk-surface/10">
         <Terminal size={10} className="text-zk-green/40 shrink-0" />
-        <span className="font-mono text-[10px] text-zk-muted/35 tracking-[0.2em]">IDENTITY_REGISTRY</span>
+        <span className="font-sans text-xs text-zk-muted/40">User Registry</span>
         <span className="text-zk-border/60">·</span>
-        <span className="font-mono text-[10px] text-zk-muted/40">{users.length} records</span>
-        <span className="flex items-center gap-1.5 font-mono text-[10px] text-zk-green/60">
+        <span className="font-sans text-xs text-zk-muted/40">{users.length} records</span>
+        <span className="flex items-center gap-1.5 font-sans text-xs text-zk-green/60">
           <span className="w-1.5 h-1.5 rounded-full bg-zk-green shadow-glow-sm" />
           {onlineCount} online
         </span>
-        <span className="flex items-center gap-1.5 font-mono text-[10px] text-zk-muted/30">
+        <span className="flex items-center gap-1.5 font-sans text-xs text-zk-muted/30">
           <span className="w-1.5 h-1.5 rounded-full bg-zk-muted/30" />
           {offlineCount} offline
         </span>
-        <div className="ml-auto font-mono text-[9px] text-zk-muted/25">
+        <div className="ml-auto font-sans text-xs text-zk-muted/25">
           {roles.length} roles · {permissions.length} permissions
         </div>
       </div>
@@ -399,8 +398,8 @@ export default function UsersPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Users size={12} className="text-zk-green" />
-                <span className="font-mono text-[11px] font-semibold text-zk-green tracking-widest">USERS</span>
-                <span className="font-mono text-[9px] text-zk-muted/35">
+                <span className="font-sans text-sm font-semibold text-zk-white">Users</span>
+                <span className="font-sans text-xs text-zk-muted/35">
                   {filtered.length !== users.length ? `${filtered.length}/${users.length}` : users.length}
                 </span>
               </div>
@@ -415,7 +414,7 @@ export default function UsersPage() {
                 {canCreate && (
                   <button
                     onClick={openCreate}
-                    className="flex items-center gap-1 px-2 py-1 rounded-sm border font-mono text-[9px] text-zk-green border-zk-green/25 bg-zk-green/5 hover:bg-zk-green/12 hover:border-zk-green/50 transition-all"
+                    className="flex items-center gap-1 px-2 py-1 rounded-sm border font-sans text-xs text-zk-green border-zk-green/25 bg-zk-green/5 hover:bg-zk-green/12 hover:border-zk-green/50 transition-all"
                   >
                     <UserPlus size={9} /> New
                   </button>
@@ -432,7 +431,7 @@ export default function UsersPage() {
                 placeholder="search users..."
                 className={cn(
                   "w-full pl-7 pr-3 py-1.5 rounded-sm border bg-zk-surface/50 border-zk-border/50",
-                  "font-mono text-[11px] text-zk-white placeholder:text-zk-muted/25",
+                  "font-sans text-sm text-zk-white placeholder:text-zk-muted/25",
                   "outline-none focus:border-zk-green/35 transition-colors",
                 )}
               />
@@ -455,7 +454,7 @@ export default function UsersPage() {
                     key={f}
                     onClick={() => setStatusFilter(f)}
                     className={cn(
-                      "flex-1 py-1 rounded-sm border font-mono text-[9px] transition-all leading-tight",
+                      "flex-1 py-1 rounded-sm border font-sans text-xs transition-all leading-tight",
                       statusFilter === f
                         ? onStyle
                         : "border-zk-border/20 text-zk-muted/25 hover:text-zk-muted/50 hover:border-zk-border/40",
@@ -483,11 +482,11 @@ export default function UsersPage() {
             ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center gap-2 py-16">
                 <Search size={20} className="text-zk-muted/15" />
-                <p className="font-mono text-[10px] text-zk-muted/30 tracking-widest">NO MATCH</p>
+                <p className="font-sans text-xs text-zk-muted/30">No match</p>
                 {search && (
                   <button
                     onClick={() => setSearch("")}
-                    className="font-mono text-[9px] text-zk-green/40 hover:text-zk-green/70 transition-colors"
+                    className="font-sans text-xs text-zk-green/40 hover:text-zk-green/70 transition-colors"
                   >
                     clear filter
                   </button>
@@ -531,14 +530,14 @@ export default function UsersPage() {
                     {/* Meta */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-0.5">
-                        <span className="font-mono text-[11px] text-zk-white font-medium truncate">
+                        <span className="font-sans text-sm text-zk-white font-medium truncate">
                           {user.profile?.display_name || `@${uname}`}
                         </span>
                         {flags.includes("Administrator") && (
                           <ShieldCheck size={9} className="text-zk-green shrink-0" />
                         )}
                       </div>
-                      <p className="font-mono text-[10px] truncate">
+                      <p className="font-sans text-xs truncate">
                         {user.profile?.display_id
                           ? <span className="text-zk-green/55">#{user.profile.display_id}</span>
                           : null}
@@ -546,7 +545,7 @@ export default function UsersPage() {
                         <span className="text-zk-muted/40">{user.email}</span>
                       </p>
                       {user.roles.length > 0 && (
-                        <p className="font-mono text-[9px] text-zk-muted/30 truncate mt-0.5">
+                        <p className="font-sans text-xs text-zk-muted/30 truncate mt-0.5">
                           {user.roles.map((r) => r.name).join(", ")}
                         </p>
                       )}
@@ -570,7 +569,7 @@ export default function UsersPage() {
                 initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.15 }}
                 className={cn(
-                  "shrink-0 flex items-center gap-2 px-5 py-2 border-b font-mono text-[11px]",
+                  "shrink-0 flex items-center gap-2 px-5 py-2 border-b font-sans text-sm",
                   toast.type === "ok"
                     ? "border-zk-green/15 bg-zk-green/5 text-zk-green"
                     : "border-zk-red/15 bg-zk-red/5 text-zk-red",
@@ -614,12 +613,12 @@ export default function UsersPage() {
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm font-semibold text-zk-white">
+                        <span className="font-sans text-sm font-semibold text-zk-white">
                           @{selected.profile?.username ?? selected.email.split("@")[0]}
                         </span>
                         <StatusBadge status={presence[selected.id] ?? "OFFLINE"} />
                       </div>
-                      <p className="font-mono text-[10px] text-zk-muted/45 mt-0.5">
+                      <p className="font-mono text-xs text-zk-muted/45 mt-0.5">
                         {selected.profile?.display_id
                           ? <span className="text-zk-green/55">#{selected.profile.display_id} · </span>
                           : null}
@@ -632,7 +631,7 @@ export default function UsersPage() {
                     {!isModerator && (
                       <button
                         onClick={() => openEdit(selected)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border font-mono text-[10px] border-zk-border/50 text-zk-slate hover:text-zk-white hover:border-zk-green/30 transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border font-sans text-sm border-zk-border/50 text-zk-slate hover:text-zk-white hover:border-zk-green/30 transition-all"
                       >
                         <Edit3 size={11} /> Edit
                       </button>
@@ -641,7 +640,7 @@ export default function UsersPage() {
                       <button
                         onClick={handleDelete}
                         disabled={deleting}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border font-mono text-[10px] border-zk-red/25 bg-zk-red/5 text-zk-red hover:bg-zk-red/12 hover:border-zk-red/50 disabled:opacity-40 transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border font-sans text-sm border-zk-red/25 bg-zk-red/5 text-zk-red hover:bg-zk-red/12 hover:border-zk-red/50 disabled:opacity-40 transition-all"
                       >
                         {deleting
                           ? <span className="w-3 h-3 border border-zk-red border-t-transparent rounded-full animate-spin" />
@@ -699,7 +698,7 @@ export default function UsersPage() {
                       <div>
                         <SectionLabel>roles</SectionLabel>
                         {selected.roles.length === 0 ? (
-                          <p className="font-mono text-[10px] text-zk-muted/25 italic">No roles assigned</p>
+                          <p className="font-sans text-xs text-zk-muted/25 italic">No roles assigned</p>
                         ) : (
                           <div className="flex flex-wrap gap-1.5">
                             {selected.roles.map((r) => (
@@ -713,7 +712,7 @@ export default function UsersPage() {
                       <div>
                         <SectionLabel>access flags</SectionLabel>
                         {(selected.profile?.access_flags ?? []).length === 0 ? (
-                          <p className="font-mono text-[10px] text-zk-muted/25 italic">No flags assigned</p>
+                          <p className="font-sans text-xs text-zk-muted/25 italic">No flags assigned</p>
                         ) : (
                           <div className="flex flex-wrap gap-1.5">
                             {(selected.profile?.access_flags ?? []).map((f) => (
@@ -749,8 +748,8 @@ export default function UsersPage() {
                 <div className="shrink-0 flex items-center justify-between px-6 py-3 border-b border-zk-border/50 bg-zk-surface/15">
                   <div className="flex items-center gap-2">
                     <Edit3 size={13} className="text-zk-green" />
-                    <span className="font-mono text-[11px] font-semibold text-zk-green tracking-widest">EDIT USER</span>
-                    <span className="font-mono text-[10px] text-zk-muted/40 ml-1">
+                    <span className="font-sans text-sm font-semibold text-zk-white">Edit User</span>
+                    <span className="font-mono text-xs text-zk-muted/40 ml-1">
                       #{selected.profile?.display_id} @{selected.profile?.username ?? selected.email}
                     </span>
                   </div>
@@ -802,8 +801,8 @@ export default function UsersPage() {
                             placeholder="min. 8 characters"
                             autoComplete="new-password"
                             className={cn(
-                              "w-full pl-8 pr-8 py-2 rounded-sm border bg-zk-surface/60 border-zk-border",
-                              "font-mono text-xs text-zk-white placeholder:text-zk-muted/30",
+                              "w-full pl-8 pr-8 py-2 rounded border bg-zk-surface/60 border-zk-border",
+                              "font-sans text-sm text-zk-white placeholder:text-zk-muted/30",
                               "outline-none focus:border-zk-green/50 transition-colors",
                             )}
                           />
@@ -824,7 +823,7 @@ export default function UsersPage() {
                     <div>
                       <SectionLabel>roles</SectionLabel>
                       {roles.length === 0 ? (
-                        <p className="font-mono text-[10px] text-zk-muted/30 italic">No roles defined yet.</p>
+                        <p className="font-sans text-xs text-zk-muted/30 italic">No roles defined yet.</p>
                       ) : (
                         <div className="flex flex-wrap gap-1.5">
                           {roles.map((r) => (
@@ -844,7 +843,7 @@ export default function UsersPage() {
                     <div>
                       <SectionLabel>access flags</SectionLabel>
                       {permissions.length === 0 ? (
-                        <p className="font-mono text-[10px] text-zk-muted/30 italic">No permissions defined yet.</p>
+                        <p className="font-sans text-xs text-zk-muted/30 italic">No permissions defined yet.</p>
                       ) : (
                         <div className="flex flex-wrap gap-1.5">
                           {permissions.map((perm) => (
@@ -864,14 +863,14 @@ export default function UsersPage() {
                 <div className="shrink-0 px-6 py-4 border-t border-zk-border/40 bg-zk-surface/10 flex items-center justify-between">
                   <button
                     onClick={() => { setRightMode("dossier"); setToast(null); }}
-                    className="font-mono text-[11px] text-zk-muted/40 hover:text-zk-slate transition-colors"
+                    className="font-sans text-sm text-zk-muted/40 hover:text-zk-slate transition-colors"
                   >
                     ← Cancel
                   </button>
                   <button
                     onClick={handleSave}
                     disabled={saving}
-                    className="flex items-center gap-2 px-5 py-2 rounded-sm border font-mono text-xs tracking-wider border-zk-green/35 bg-zk-green/8 text-zk-green hover:bg-zk-green/18 hover:border-zk-green/60 disabled:opacity-40 disabled:pointer-events-none transition-all"
+                    className="flex items-center gap-2 px-5 py-2 rounded border font-sans text-sm font-medium border-zk-green/35 bg-zk-green/8 text-zk-green hover:bg-zk-green/18 hover:border-zk-green/60 disabled:opacity-40 disabled:pointer-events-none transition-all"
                   >
                     {saving
                       ? <span className="w-3 h-3 border border-zk-green border-t-transparent rounded-full animate-spin" />
@@ -893,7 +892,7 @@ export default function UsersPage() {
                 <div className="shrink-0 flex items-center justify-between px-6 py-3 border-b border-zk-border/50 bg-zk-surface/15">
                   <div className="flex items-center gap-2">
                     <UserPlus size={13} className="text-zk-green" />
-                    <span className="font-mono text-[11px] font-semibold text-zk-green tracking-widest">CREATE USER</span>
+                    <span className="font-sans text-sm font-semibold text-zk-white">Create User</span>
                   </div>
                   <button
                     onClick={() => { setRightMode(null); setSelected(null); }}
@@ -931,8 +930,8 @@ export default function UsersPage() {
                             placeholder="user@zeko.os"
                             autoComplete="off"
                             className={cn(
-                              "w-full pl-8 pr-3 py-2 rounded-sm border bg-zk-surface/60 border-zk-border",
-                              "font-mono text-xs text-zk-white placeholder:text-zk-muted/30",
+                              "w-full pl-8 pr-3 py-2 rounded border bg-zk-surface/60 border-zk-border",
+                              "font-sans text-sm text-zk-white placeholder:text-zk-muted/30",
                               "outline-none focus:border-zk-green/50 transition-colors",
                             )}
                           />
@@ -954,8 +953,8 @@ export default function UsersPage() {
                             placeholder="min. 8 characters"
                             autoComplete="new-password"
                             className={cn(
-                              "w-full pl-8 pr-8 py-2 rounded-sm border bg-zk-surface/60 border-zk-border",
-                              "font-mono text-xs text-zk-white placeholder:text-zk-muted/30",
+                              "w-full pl-8 pr-8 py-2 rounded border bg-zk-surface/60 border-zk-border",
+                              "font-sans text-sm text-zk-white placeholder:text-zk-muted/30",
                               "outline-none focus:border-zk-green/50 transition-colors",
                             )}
                           />
@@ -975,7 +974,7 @@ export default function UsersPage() {
                     <div>
                       <SectionLabel>roles</SectionLabel>
                       {roles.length === 0 ? (
-                        <p className="font-mono text-[10px] text-zk-muted/30 italic">No roles defined yet.</p>
+                        <p className="font-sans text-xs text-zk-muted/30 italic">No roles defined yet.</p>
                       ) : (
                         <div className="flex flex-wrap gap-1.5">
                           {roles.map((r) => (
@@ -994,7 +993,7 @@ export default function UsersPage() {
                     <div>
                       <SectionLabel>access flags</SectionLabel>
                       {permissions.length === 0 ? (
-                        <p className="font-mono text-[10px] text-zk-muted/30 italic">No permissions defined yet.</p>
+                        <p className="font-sans text-xs text-zk-muted/30 italic">No permissions defined yet.</p>
                       ) : (
                         <div className="flex flex-wrap gap-1.5">
                           {permissions.map((perm) => (
@@ -1013,14 +1012,14 @@ export default function UsersPage() {
                 <div className="shrink-0 px-6 py-4 border-t border-zk-border/40 bg-zk-surface/10 flex items-center justify-between">
                   <button
                     onClick={() => setRightMode(null)}
-                    className="font-mono text-[11px] text-zk-muted/40 hover:text-zk-slate transition-colors"
+                    className="font-sans text-sm text-zk-muted/40 hover:text-zk-slate transition-colors"
                   >
                     ← Cancel
                   </button>
                   <button
                     onClick={handleSave}
                     disabled={saving || !form.email || !form.username || !form.password}
-                    className="flex items-center gap-2 px-5 py-2 rounded-sm border font-mono text-xs tracking-wider border-zk-green/35 bg-zk-green/8 text-zk-green hover:bg-zk-green/18 hover:border-zk-green/60 disabled:opacity-40 disabled:pointer-events-none transition-all"
+                    className="flex items-center gap-2 px-5 py-2 rounded border font-sans text-sm font-medium border-zk-green/35 bg-zk-green/8 text-zk-green hover:bg-zk-green/18 hover:border-zk-green/60 disabled:opacity-40 disabled:pointer-events-none transition-all"
                   >
                     {saving
                       ? <span className="w-3 h-3 border border-zk-green border-t-transparent rounded-full animate-spin" />
@@ -1042,13 +1041,13 @@ export default function UsersPage() {
                   <Users size={24} className="text-zk-green/20" />
                 </div>
                 <div className="text-center space-y-1">
-                  <p className="font-mono text-[11px] text-zk-muted/30 tracking-widest">SELECT A USER RECORD</p>
-                  <p className="font-mono text-[9px] text-zk-muted/20">or create a new identity</p>
+                  <p className="font-sans text-sm text-zk-muted/30">Select a user</p>
+                  <p className="font-sans text-xs text-zk-muted/20">or create a new identity</p>
                 </div>
                 {canCreate && (
                   <button
                     onClick={openCreate}
-                    className="flex items-center gap-2 px-4 py-2 rounded-sm border font-mono text-xs border-zk-green/25 bg-zk-green/5 text-zk-green/60 hover:text-zk-green hover:bg-zk-green/12 hover:border-zk-green/40 transition-all"
+                    className="flex items-center gap-2 px-4 py-2 rounded border font-sans text-sm font-medium border-zk-green/25 bg-zk-green/5 text-zk-green/60 hover:text-zk-green hover:bg-zk-green/12 hover:border-zk-green/40 transition-all"
                   >
                     <UserPlus size={12} /> New User
                   </button>

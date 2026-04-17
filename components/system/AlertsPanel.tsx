@@ -16,25 +16,25 @@ const SEVERITY: Record<
   { label: string; color: string; bg: string; border: string; icon: React.ReactNode }
 > = {
   critical: {
-    label:  "CRITICAL",
+    label:  "Critical",
     color:  "text-zk-red",
     bg:     "bg-zk-red/5",
     border: "border-zk-red/20",
-    icon:   <ShieldAlert size={11} />,
+    icon:   <ShieldAlert size={12} />,
   },
   warn: {
-    label:  "WARN",
+    label:  "Warning",
     color:  "text-zk-amber",
     bg:     "bg-zk-amber/5",
     border: "border-zk-amber/20",
-    icon:   <AlertTriangle size={11} />,
+    icon:   <AlertTriangle size={12} />,
   },
   info: {
-    label:  "INFO",
+    label:  "Info",
     color:  "text-zk-green",
     bg:     "bg-zk-green/5",
     border: "border-zk-green/15",
-    icon:   <Info size={11} />,
+    icon:   <Info size={12} />,
   },
 };
 
@@ -83,8 +83,8 @@ export function AlertsPanel({ open, alerts, onClose, onClear }: AlertsPanelProps
           exit={{    opacity: 0, y: -8, scale: 0.98 }}
           transition={{ duration: 0.18, ease: "easeOut" }}
           className={cn(
-            "absolute top-full right-0 mt-2 w-[360px] z-[200]",
-            "rounded-sm border border-zk-border",
+            "absolute top-full right-0 mt-2 w-[380px] z-[200]",
+            "rounded border border-zk-border",
             "bg-[rgba(13,17,23,0.97)] backdrop-blur-[16px]",
             "shadow-[0_8px_32px_rgba(0,0,0,0.7),0_0_0_1px_rgba(0,255,65,0.06)]",
             "flex flex-col overflow-hidden",
@@ -93,13 +93,13 @@ export function AlertsPanel({ open, alerts, onClose, onClear }: AlertsPanelProps
           onClick={(e) => e.stopPropagation()}
         >
           {/* ── Header ───────────────────────────────────────── */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-zk-border">
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-[11px] font-semibold text-zk-green tracking-[0.15em] uppercase">
-                DM_ALERTS
+          <div className="flex items-center justify-between px-4 py-3 border-b border-zk-border">
+            <div className="flex items-center gap-2.5">
+              <span className="font-sans text-sm font-semibold text-zk-white">
+                DM Alerts
               </span>
               {alerts.length > 0 && (
-                <span className="font-mono text-[9px] text-zk-bg bg-zk-green rounded-sm px-1.5 py-0.5 leading-none">
+                <span className="font-sans text-xs text-zk-bg bg-zk-green rounded px-1.5 py-0.5 leading-none">
                   {alerts.length}
                 </span>
               )}
@@ -107,18 +107,18 @@ export function AlertsPanel({ open, alerts, onClose, onClear }: AlertsPanelProps
             <button
               onClick={onClose}
               aria-label="Close alerts"
-              className="text-zk-muted hover:text-zk-white transition-colors duration-150"
+              className="text-zk-muted hover:text-zk-white transition-colors duration-150 p-1 rounded hover:bg-zk-surface"
             >
-              <X size={13} />
+              <X size={14} />
             </button>
           </div>
 
           {/* ── Alert list ───────────────────────────────────── */}
           <div className="flex-1 overflow-y-auto max-h-[320px]">
             {alerts.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 gap-2">
-                <span className="font-mono text-[10px] text-zk-muted/40 tracking-widest">
-                  NO ACTIVE ALERTS
+              <div className="flex flex-col items-center justify-center py-12 gap-2">
+                <span className="font-sans text-xs text-zk-muted/40 uppercase tracking-wide">
+                  No active alerts
                 </span>
               </div>
             ) : (
@@ -129,7 +129,7 @@ export function AlertsPanel({ open, alerts, onClose, onClear }: AlertsPanelProps
                     <div
                       key={alert.id}
                       className={cn(
-                        "flex items-start gap-3 px-4 py-3",
+                        "flex items-start gap-3 px-4 py-3.5",
                         "transition-colors duration-100 hover:bg-white/[0.02]"
                       )}
                     >
@@ -139,24 +139,24 @@ export function AlertsPanel({ open, alerts, onClose, onClear }: AlertsPanelProps
                       </span>
 
                       {/* Content */}
-                      <div className="flex-1 min-w-0 space-y-0.5">
+                      <div className="flex-1 min-w-0 space-y-1">
                         <div className="flex items-center gap-2">
                           {/* Severity tag */}
                           <span
                             className={cn(
-                              "font-mono text-[9px] font-semibold tracking-widest px-1.5 py-0.5 rounded-sm border",
+                              "font-sans text-xs font-medium px-1.5 py-0.5 rounded border",
                               sev.color, sev.bg, sev.border
                             )}
                           >
                             {sev.label}
                           </span>
                           {/* Timestamp */}
-                          <span className="font-mono text-[9px] text-zk-muted/50 tracking-wider">
+                          <span className="font-mono text-xs text-zk-muted/50">
                             {alert.timestamp}
                           </span>
                         </div>
                         {/* Message */}
-                        <p className="font-mono text-[11px] text-zk-slate/90 leading-relaxed">
+                        <p className="font-sans text-sm text-zk-slate/90 leading-relaxed">
                           {alert.message}
                         </p>
                       </div>
@@ -168,24 +168,24 @@ export function AlertsPanel({ open, alerts, onClose, onClear }: AlertsPanelProps
           </div>
 
           {/* ── Footer ───────────────────────────────────────── */}
-          <div className="px-4 py-2.5 border-t border-zk-border flex items-center justify-between">
-            <span className="font-mono text-[9px] text-zk-muted/40 tracking-widest">
-              {alerts.filter(a => a.severity === "critical").length} CRITICAL
+          <div className="px-4 py-3 border-t border-zk-border flex items-center justify-between">
+            <span className="font-sans text-xs text-zk-muted/40 uppercase tracking-wide">
+              {alerts.filter(a => a.severity === "critical").length} critical
               &nbsp;·&nbsp;
-              {alerts.filter(a => a.severity === "warn").length} WARN
+              {alerts.filter(a => a.severity === "warn").length} warn
               &nbsp;·&nbsp;
-              {alerts.filter(a => a.severity === "info").length} INFO
+              {alerts.filter(a => a.severity === "info").length} info
             </span>
             <button
               onClick={onClear}
               className={cn(
-                "flex items-center gap-1.5 font-mono text-[10px] tracking-wider",
-                "text-zk-muted hover:text-zk-red transition-colors duration-150",
+                "flex items-center gap-1.5 font-sans text-xs px-3 py-1.5 rounded",
+                "text-zk-muted hover:text-zk-red hover:bg-zk-red/5 transition-colors duration-150",
                 alerts.length === 0 && "opacity-30 pointer-events-none"
               )}
             >
-              <Trash2 size={11} />
-              Clear Logs
+              <Trash2 size={12} />
+              Clear
             </button>
           </div>
         </motion.div>

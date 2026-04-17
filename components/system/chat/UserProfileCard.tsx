@@ -81,8 +81,8 @@ export function UserProfileCard({
       ref={ref}
       className={cn(
         "fixed z-[450] w-[220px]",
-        "bg-[rgba(10,15,10,0.98)] border border-zk-border rounded-sm",
-        "shadow-[0_8px_32px_rgba(0,0,0,0.75),0_0_0_1px_rgba(0,255,65,0.07)]",
+        "bg-[rgba(10,15,10,0.98)] border border-zk-border rounded",
+        "shadow-[0_8px_32px_rgba(0,0,0,0.6)]",
         "overflow-hidden",
         "animate-fade-in-up",
       )}
@@ -94,7 +94,7 @@ export function UserProfileCard({
       {/* Header: avatar + close */}
       <div className="flex items-start justify-between px-3 pt-3 pb-0 gap-2">
         <div className={cn(
-          "w-10 h-10 rounded-sm shrink-0 flex items-center justify-center",
+          "w-10 h-10 rounded shrink-0 flex items-center justify-center",
           "border text-sm font-mono font-bold select-none",
           color,
         )}>
@@ -111,10 +111,10 @@ export function UserProfileCard({
 
       {/* Identity */}
       <div className="px-3 pt-2 pb-3 space-y-0.5">
-        <p className="font-mono text-[13px] font-semibold text-zk-white leading-tight">
+        <p className="font-sans text-sm font-semibold text-zk-white leading-tight">
           {name}
         </p>
-        <p className="font-mono text-[10px] text-zk-green/70 tracking-wide">
+        <p className="font-sans text-sm text-zk-muted/60">
           @{username}
         </p>
 
@@ -124,8 +124,8 @@ export function UserProfileCard({
             "w-1.5 h-1.5 rounded-full shrink-0",
             isOnline ? "bg-zk-green shadow-glow-sm" : "bg-zk-muted/30",
           )} />
-          <span className="font-mono text-[10px] text-zk-muted/50 tracking-wider">
-            {isOnline ? "ONLINE" : "OFFLINE"}
+          <span className="font-sans text-xs text-zk-muted/50">
+            {isOnline ? "Online" : "Offline"}
           </span>
         </div>
       </div>
@@ -139,7 +139,7 @@ export function UserProfileCard({
               onClick={() => { onOpenDm(userId, username); onClose(); }}
               className={cn(
                 "w-full h-7 flex items-center justify-center gap-1.5",
-                "font-mono text-[10px] tracking-wider rounded-sm border",
+                "font-sans text-sm rounded border",
                 "border-zk-green/25 bg-zk-green/8 text-zk-green/70",
                 "hover:bg-zk-green/15 hover:border-zk-green/50 hover:text-zk-green",
                 "transition-all duration-150",
