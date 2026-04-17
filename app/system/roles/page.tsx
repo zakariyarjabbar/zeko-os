@@ -685,7 +685,7 @@ function PermissionsTab() {
             <span className="font-sans text-xs text-zk-muted/35">({perms.length})</span>
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={fetchPerms} className="p-1 text-zk-muted/35 hover:text-zk-green transition-colors">
+            <button onClick={() => fetchPerms()} className="p-1 text-zk-muted/35 hover:text-zk-green transition-colors">
               <RefreshCw size={11} className={loading ? "animate-spin" : ""} />
             </button>
             <button
