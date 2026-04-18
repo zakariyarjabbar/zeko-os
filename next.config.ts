@@ -2,13 +2,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Enable React strict mode for better development warnings
   reactStrictMode: true,
+  poweredByHeader: false,
 
-  // Compiler optimizations
   compiler: {
-    // Remove console.log in production
     removeConsole: process.env.NODE_ENV === "production",
+  },
+
+  experimental: {
+    webpackMemoryOptimizations: true,
   },
 
   // Image domains for future use

@@ -44,16 +44,16 @@ function useTyping(text: string, speed = 38, startDelay = 0) {
   const [out, setOut] = useState("");
   const [done, setDone] = useState(false);
   useEffect(() => {
+    let iv: ReturnType<typeof setInterval> | undefined;
     const t0 = setTimeout(() => {
       let i = 0;
-      const iv = setInterval(() => {
+      iv = setInterval(() => {
         i++;
         setOut(text.slice(0, i));
         if (i >= text.length) { setDone(true); clearInterval(iv); }
       }, speed);
-      return () => clearInterval(iv);
     }, startDelay);
-    return () => clearTimeout(t0);
+    return () => { clearTimeout(t0); clearInterval(iv); };
   }, [text, speed, startDelay]);
   return { out, done };
 }
@@ -75,17 +75,17 @@ function useClock() {
 function Counter({ value, suffix = "", delay = 0 }: { value: number; suffix?: string; delay?: number }) {
   const [n, setN] = useState(0);
   useEffect(() => {
+    let iv: ReturnType<typeof setInterval> | undefined;
     const t = setTimeout(() => {
       const step = value / (1400 / 16);
       let cur = 0;
-      const iv = setInterval(() => {
+      iv = setInterval(() => {
         cur = Math.min(cur + step, value);
         setN(cur);
         if (cur >= value) clearInterval(iv);
       }, 16);
-      return () => clearInterval(iv);
     }, delay);
-    return () => clearTimeout(t);
+    return () => { clearTimeout(t); clearInterval(iv); };
   }, [value, delay]);
   return <>{value % 1 ? n.toFixed(2) : Math.floor(n)}{suffix}</>;
 }

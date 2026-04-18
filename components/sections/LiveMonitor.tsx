@@ -212,14 +212,14 @@ function LiveClock() {
   );
 }
 
+function initMetrics(): Record<string, MetricState> {
+  const s: Record<string, MetricState> = {};
+  for (const m of METRICS) s[m.key] = { current: m.init, history: [m.init] };
+  return s;
+}
+
 // ─── Main component ──────────────────────────────────────────
 export function LiveMonitor() {
-  // Initialise metric state
-  const initMetrics = (): Record<string, MetricState> => {
-    const s: Record<string, MetricState> = {};
-    for (const m of METRICS) s[m.key] = { current: m.init, history: [m.init] };
-    return s;
-  };
   const [metrics,  setMetrics]  = useState<Record<string, MetricState>>(initMetrics);
   const [procs,    setProcs]    = useState<Process[]>(INITIAL_PROCS);
   const [hoveredPid, setHoveredPid] = useState<number | null>(null);
