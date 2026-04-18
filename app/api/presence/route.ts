@@ -44,13 +44,29 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const now = Date.now();
-  const result: Record<string, "ONLINE" | "OFFLINE"> = {};
+  const now      = Date.now();
+  const result:  Record<string, "ONLINE" | "OFFLINE"> = {};
+  const staleIds: string[] = [];
 
   for (const p of data ?? []) {
-    const lastActive = new Date(p.last_active as string).getTime();
-    const fresh      = now - lastActive < ONLINE_THRESHOLD_MS;
-    result[p.id as string] = (p.session_status === "ONLINE" && fresh) ? "ONLINE" : "OFFLINE";
+    const lastActiveMs = new Date(p.last_active as string).getTime();
+    const fresh        = !isNaN(lastActiveMs) && now - lastActiveMs < ONLINE_THRESHOLD_MS;
+
+    if ((p.session_status as string) === "ONLINE" && !fresh) {
+      // Heartbeat stopped — flip to OFFLINE, keep last_active as the last-seen timestamp
+      staleIds.push(p.id as string);
+      result[p.id as string] = "OFFLINE";
+    } else {
+      result[p.id as string] = (p.session_status === "ONLINE" && fresh) ? "ONLINE" : "OFFLINE";
+    }
+  }
+
+  // Bulk-write stale users OFFLINE (fire-and-forget, don't block the response)
+  if (staleIds.length > 0) {
+    void supabaseAdmin
+      .from("profiles")
+      .update({ session_status: "OFFLINE" })
+      .in("id", staleIds);
   }
 
   return NextResponse.json(result);
@@ -61,13 +77,11 @@ export async function DELETE() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Zero out last_active so the stale-check also detects offline immediately,
-  // even when only last_active freshness is evaluated.
   await supabaseAdmin
     .from("profiles")
     .update({
       session_status: "OFFLINE",
-      last_active:    new Date(0).toISOString(), // epoch — always stale
+      last_active:    new Date().toISOString(),
     })
     .eq("id", session.id);
 

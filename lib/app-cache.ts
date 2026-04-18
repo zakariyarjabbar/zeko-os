@@ -65,6 +65,7 @@ export interface CachedUserProfile {
   username:       string;
   access_flags:   string[];
   session_status: string;
+  last_active:    string | null;
 }
 
 export interface CachedUser {

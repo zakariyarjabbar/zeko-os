@@ -91,9 +91,14 @@ export function ProfileDrawer({ open, profile, onClose }: ProfileDrawerProps) {
 
   const status     = STATUS_CONFIG[profile.sessionStatus] ?? STATUS_CONFIG.OFFLINE;
   const initial    = profile.username.charAt(0).toUpperCase();
-  const lastActive = new Date(profile.lastActive).toLocaleTimeString([], {
-    hour: "2-digit", minute: "2-digit", second: "2-digit",
-  });
+
+  const lastActiveMs = new Date(profile.lastActive).getTime();
+  const lastActive   = isNaN(lastActiveMs) || lastActiveMs < 1_000_000_000_000
+    ? "—"
+    : new Date(profile.lastActive).toLocaleString([], {
+        year: "numeric", month: "short", day: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      });
 
   const [logoutTransition, setLogoutTransition] = useState(false);
 

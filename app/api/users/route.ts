@@ -25,7 +25,7 @@ export async function GET() {
 
   const { data: profiles } = await supabaseAdmin
     .from("profiles")
-    .select("id, display_id, display_name, username, access_flags, session_status");
+    .select("id, display_id, display_name, username, access_flags, session_status, last_active");
 
   const { data: userRoles } = await supabaseAdmin
     .from("user_roles")
@@ -50,7 +50,9 @@ export async function GET() {
       emailConfirmed: !!u.email_confirmed_at,
       createdAt:      u.created_at,
       lastSignIn:     u.last_sign_in_at ?? null,
-      profile:        p ?? null,
+      profile:        p
+        ? { ...p, last_active: p.last_active ?? u.last_sign_in_at ?? null }
+        : null,
       roles:          roleMap.get(u.id) ?? [],
     };
   });

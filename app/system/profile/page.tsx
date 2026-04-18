@@ -346,7 +346,15 @@ function AccountInfo() {
     { label: "Display ID",  value: profile.displayId > 0 ? `#${profile.displayId}` : "—", accent: true  },
     { label: "Email",       value: session.email,                                           accent: false },
     { label: "Role",        value: profile.role,                                            accent: true  },
-    { label: "Last Active", value: new Date(profile.lastActive).toLocaleString(),           accent: false },
+    { label: "Last Active", value: (() => {
+        const ms = new Date(profile.lastActive).getTime();
+        return isNaN(ms) || ms < 1_000_000_000_000
+          ? "—"
+          : new Date(profile.lastActive).toLocaleString([], {
+              year: "numeric", month: "short", day: "numeric",
+              hour: "2-digit", minute: "2-digit",
+            });
+      })(), accent: false },
   ];
 
   return (

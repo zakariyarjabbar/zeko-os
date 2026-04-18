@@ -44,7 +44,9 @@ function getAvatarClass(flags: string[]) {
 
 function timeAgo(iso: string | null | undefined) {
   if (!iso) return "—";
-  const diff = Date.now() - new Date(iso).getTime();
+  const ms = new Date(iso).getTime();
+  if (isNaN(ms) || ms < 1_000_000_000_000) return "—";
+  const diff = Date.now() - ms;
   const s = Math.floor(diff / 1000);
   if (s < 60) return `${s}s ago`;
   const m = Math.floor(s / 60);
@@ -52,6 +54,16 @@ function timeAgo(iso: string | null | undefined) {
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h ago`;
   return `${Math.floor(h / 24)}d ago`;
+}
+
+function formatLastActive(iso: string | null | undefined) {
+  if (!iso) return "—";
+  const ms = new Date(iso).getTime();
+  if (isNaN(ms) || ms < 1_000_000_000_000) return "—";
+  return new Date(iso).toLocaleString([], {
+    year: "numeric", month: "short", day: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
 }
 
 function blankForm() {
@@ -716,7 +728,10 @@ export default function UsersPage() {
                           <DRow label="Last active" value={
                             <span className="flex items-center gap-1.5">
                               <Clock size={9} className="text-zk-muted/40" />
-                              {timeAgo(selected.lastSignIn)}
+                              {presence[selected.id] === "ONLINE"
+                                ? <span className="text-zk-green">now</span>
+                                : formatLastActive(selected.profile?.last_active)
+                              }
                             </span>
                           } />
                           <DRow label="Created"     value={timeAgo(selected.createdAt)} />
