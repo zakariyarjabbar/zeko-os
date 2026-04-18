@@ -12,7 +12,13 @@ export function PresenceTracker() {
     const beat = () => fetch("/api/presence", { method: "POST" });
 
     // ── Mark online immediately ──────────────────────────────
-    beat();
+    // After the first beat lands, update SessionContext so the profile drawer
+    // shows ONLINE without waiting for a server re-render (fixes prod mismatch).
+    beat().then(() => {
+      window.dispatchEvent(
+        new CustomEvent("zk:profile:updated", { detail: { sessionStatus: "ONLINE" } }),
+      );
+    });
 
     // ── Heartbeat every 10 s ─────────────────────────────────
     // Keeps last_active fresh so the 25-second stale check never
