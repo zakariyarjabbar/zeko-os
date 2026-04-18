@@ -11,8 +11,7 @@ import { ProfileDrawer }  from "./ProfileDrawer";
 import { AuthTransition } from "@/components/ui/AuthTransition";
 import { useRouter, usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { type UserProfile } from "@/lib/profile";
-import { type SessionPayload } from "@/lib/auth";
+import { useProfile, useSession } from "@/components/system/SessionContext";
 import { getChatCache } from "@/lib/chat-cache";
 
 export type AlertSeverity = "critical" | "warn" | "info";
@@ -39,11 +38,6 @@ const ROUTE_LABELS: Record<string, string> = {
   "/system/users":    "Users",
   "/system/roles":    "Roles",
 };
-
-interface SystemHeaderProps {
-  session: SessionPayload;
-  profile: UserProfile;
-}
 
 function LiveClock() {
   const [time, setTime] = useState("");
@@ -91,7 +85,9 @@ function IconBtn({
   );
 }
 
-export function SystemHeader({ session, profile }: SystemHeaderProps) {
+export function SystemHeader() {
+  const profile   = useProfile();
+  const session   = useSession();
   const router    = useRouter();
   const pathname  = usePathname();
   const [loggingOut,        setLoggingOut]        = useState(false);

@@ -68,7 +68,7 @@ export default async function SystemLayout({
         {/* Live permission-revoke notification — appears without page refresh */}
         <AccessRevokedOverlay />
         <div className="fixed inset-0 flex flex-col bg-zk-bg overflow-hidden">
-          <SystemHeader profile={profile} session={session} />
+          <SystemHeader />
           <div className="flex flex-1 overflow-hidden">
             <SystemSidebar />
             {/* SystemContent renders sections via client state — no server round-trip */}
