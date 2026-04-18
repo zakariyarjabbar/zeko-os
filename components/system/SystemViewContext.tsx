@@ -7,7 +7,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 
-export type SystemView = "overview" | "chat" | "inbox" | "users" | "roles";
+export type SystemView = "overview" | "chat" | "inbox" | "users" | "roles" | "profile";
 
 const VIEW_PATHS: Record<SystemView, string> = {
   overview: "/system/overview",
@@ -15,6 +15,7 @@ const VIEW_PATHS: Record<SystemView, string> = {
   inbox:    "/system/inbox",
   users:    "/system/users",
   roles:    "/system/roles",
+  profile:  "/system/profile",
 };
 
 function pathToView(path: string): SystemView {
@@ -22,6 +23,7 @@ function pathToView(path: string): SystemView {
   if (path.startsWith("/system/inbox"))    return "inbox";
   if (path.startsWith("/system/users"))    return "users";
   if (path.startsWith("/system/roles"))    return "roles";
+  if (path.startsWith("/system/profile"))  return "profile";
   return "overview";
 }
 

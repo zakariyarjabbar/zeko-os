@@ -5,7 +5,7 @@
 
 "use client";
 
-import { LayoutDashboard, MessageSquare, Inbox, Users, Lock, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, MessageSquare, Inbox, Users, Lock, ShieldCheck, UserCog } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { useProfile } from "@/components/system/SessionContext";
@@ -37,6 +37,7 @@ const NAV_ITEMS: NavItem[] = [
   { view: "inbox",    label: "Inbox",    icon: Inbox,       badge: "unread", requireFlag: "view-inbox" },
   { view: "users",    label: "Users",    icon: Users,       requireFlag: "moderator" },
   { view: "roles",    label: "Roles",    icon: ShieldCheck, requireFlag: "Administrator" },
+  { view: "profile",  label: "Profile",  icon: UserCog },
 ];
 
 // ─── Locked item ──────────────────────────────────────────────

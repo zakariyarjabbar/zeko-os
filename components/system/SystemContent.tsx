@@ -20,6 +20,7 @@ import ChatLoading     from "@/app/system/chat/loading";
 import InboxLoading    from "@/app/system/inbox/loading";
 import RolesLoading    from "@/app/system/roles/loading";
 import OverviewLoading from "@/app/system/overview/loading";
+import ProfileLoading  from "@/app/system/profile/loading";
 
 // Eagerly import every section — they all share the same client bundle
 import OverviewPage from "@/app/system/overview/page";
@@ -27,14 +28,16 @@ import ChatPage     from "@/app/system/chat/page";
 import InboxPage    from "@/app/system/inbox/page";
 import UsersPage    from "@/app/system/users/page";
 import RolesPage    from "@/app/system/roles/page";
+import ProfilePage  from "@/app/system/profile/page";
 
 function LoadingSkeleton({ view }: { view: string }) {
   switch (view) {
-    case "chat":  return <ChatLoading />;
-    case "inbox": return <InboxLoading />;
-    case "users": return <UsersLoading />;
-    case "roles": return <RolesLoading />;
-    default:      return <OverviewLoading />;
+    case "chat":    return <ChatLoading />;
+    case "inbox":   return <InboxLoading />;
+    case "users":   return <UsersLoading />;
+    case "roles":   return <RolesLoading />;
+    case "profile": return <ProfileLoading />;
+    default:        return <OverviewLoading />;
   }
 }
 
@@ -60,10 +63,11 @@ export function SystemContent() {
     view;
 
   switch (effectiveView) {
-    case "chat":  return <ChatPage />;
-    case "inbox": return <InboxPage />;
-    case "users": return <UsersPage />;
-    case "roles": return <RolesPage />;
-    default:      return <OverviewPage />;
+    case "chat":    return <ChatPage />;
+    case "inbox":   return <InboxPage />;
+    case "users":   return <UsersPage />;
+    case "roles":   return <RolesPage />;
+    case "profile": return <ProfilePage />;
+    default:        return <OverviewPage />;
   }
 }

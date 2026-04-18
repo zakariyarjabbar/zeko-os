@@ -42,6 +42,17 @@ export function SessionProvider({
     return () => window.removeEventListener("zk:flags:updated", onFlagsUpdated);
   }, []);
 
+  useEffect(() => {
+    function onProfileUpdated(e: Event) {
+      const updates = (e as CustomEvent<Partial<UserProfile>>).detail;
+      if (updates && typeof updates === "object") {
+        setProfile((p) => ({ ...p, ...updates }));
+      }
+    }
+    window.addEventListener("zk:profile:updated", onProfileUpdated);
+    return () => window.removeEventListener("zk:profile:updated", onProfileUpdated);
+  }, []);
+
   return (
     <SessionContext.Provider value={{ session, profile }}>
       {children}

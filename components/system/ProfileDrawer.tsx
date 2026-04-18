@@ -232,9 +232,8 @@ export function ProfileDrawer({ open, profile, onClose }: ProfileDrawerProps) {
                   </div>
                 </div>
 
-                <DataRow label="Uptime"      value={uptime}              accent />
-                <DataRow label="Last Active" value={lastActive}                  />
-                <DataRow label="Last IP"     value={profile.lastLoginIp} accent />
+                <DataRow label="Uptime"      value={uptime}    accent />
+                <DataRow label="Last Active" value={lastActive}          />
               </div>
 
               {/* ── Access flags ──────────────────────────── */}
