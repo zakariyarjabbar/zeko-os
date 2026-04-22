@@ -365,7 +365,7 @@ export default function SignupForm() {
         <form onSubmit={handleSubmit} noValidate className="space-y-5">
           <AuthField
             id="email"
-            label="Email Endpoint"
+            label="Email"
             type="email"
             value={email}
             onChange={setEmail}
@@ -500,7 +500,7 @@ export default function SignupForm() {
               ) : (
                 <>
                   <span className="opacity-50">──▶</span>
-                  <span>Register Node</span>
+                  <span>Register</span>
                   <span className="opacity-50">──▶</span>
                 </>
               )}
@@ -509,12 +509,12 @@ export default function SignupForm() {
         </form>
 
         <p className="mt-6 font-mono text-[10px] text-zk-muted/55 text-center tracking-wider">
-          Already registered?{" "}
+          Already have one?{" "}
           <Link
             href="/login"
             className="text-zk-green/70 hover:text-zk-green transition-colors duration-150"
           >
-            Connect to node
+            Connect to it
           </Link>
         </p>
       </AuthShell>

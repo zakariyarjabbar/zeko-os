@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { AlertTriangle } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AuthTransition } from "@/components/ui/AuthTransition";
 import {
   AuthShell, ACCENTS,
@@ -83,6 +84,8 @@ function useTelemetry() {
 export default function LoginForm() {
   const bgRef = useRef<NetworkBgHandle | null>(null);
 
+  const router = useRouter();
+
   const [email,          setEmail]          = useState("");
   const [password,       setPassword]       = useState("");
   const [persistSession, setPersistSession] = useState(false);
@@ -152,6 +155,16 @@ export default function LoginForm() {
     return emailLooksValid(email) ? "valid" : "warn";
   }, [email]);
   const passwordState: FieldState = password.length > 0 ? "valid" : "idle";
+
+  // ── Navigate to /reset-password, pre-filling email if valid ──
+  function handleResetNav() {
+    push("CHECK", "navigating to recovery");
+    const addr = email.trim();
+    const qs = addr && emailLooksValid(addr)
+      ? `?email=${encodeURIComponent(addr)}`
+      : "";
+    router.push(`/reset-password${qs}`);
+  }
 
   // ── Submit ──────────────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
@@ -270,7 +283,7 @@ export default function LoginForm() {
                 onChange={(e) => {
                   const on = e.target.checked;
                   setPersistSession(on);
-                  push("CHECK", `persist session ${on ? "on (30d)" : "off (8h)"}`);
+                  push("CHECK", `remember me ${on ? "on (30d)" : "off (8h)"}`);
                 }}
                 className="sr-only"
               />
@@ -288,15 +301,16 @@ export default function LoginForm() {
                 />
               </span>
               <span className="group-hover:text-zk-green/70 transition-colors">
-                Persist session
+                Remember me
               </span>
             </label>
             <button
               type="button"
-              onClick={() => push("CHECK", "recovery path unavailable")}
-              className="text-zk-muted/55 hover:text-zk-green/70 transition-colors tracking-wider"
+              onClick={handleResetNav}
+              disabled={loading}
+              className="text-zk-muted/55 hover:text-zk-green/70 transition-colors tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Lost token?
+              Reset password
             </button>
           </div>
 
@@ -374,12 +388,12 @@ export default function LoginForm() {
 
         {/* Footer link */}
         <p className="mt-6 font-mono text-[10px] text-zk-muted/55 text-center tracking-wider">
-          No node?{" "}
+          No account?{" "}
           <Link
             href="/signup"
             className="text-zk-green/70 hover:text-zk-green transition-colors duration-150"
           >
-            Register identity
+            Register one
           </Link>
         </p>
       </AuthShell>
