@@ -49,7 +49,7 @@ export const metadata: Metadata = {
   authors: [{ name: "Zakariya Jabbar", url: "https://zeko.os" }],
   openGraph: {
     title: "ZEKO_OS",
-    description: "High-Performance Digital Environment",
+    description: "Zeko OS is a precision-engineered digital environment built for performance, security, and scale. Initializing now.",
     type: "website",
   },
 };
