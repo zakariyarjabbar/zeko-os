@@ -20,14 +20,14 @@ function getAnonClient() {
 
 export async function POST(req: NextRequest) {
   // ── Parse body ──────────────────────────────────────────────
-  let body: { email?: string; password?: string };
+  let body: { email?: string; password?: string; persistSession?: boolean };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const { email, password } = body;
+  const { email, password, persistSession } = body;
 
   if (!email?.trim() || !password) {
     return NextResponse.json({ error: "Email and password are required." }, { status: 400 });
@@ -72,10 +72,11 @@ export async function POST(req: NextRequest) {
 
   // ── Set session cookie ───────────────────────────────────────
   await setSession({
-    id:    user.id,
-    email: user.email!,
-    name:  displayName,
+    id:      user.id,
+    email:   user.email!,
+    name:    displayName,
     role,
+    persist: persistSession === true,
   });
 
   return NextResponse.json({ ok: true, name: displayName });

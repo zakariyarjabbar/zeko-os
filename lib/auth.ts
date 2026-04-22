@@ -21,15 +21,19 @@
 import { cookies } from "next/headers";
 import { signPayload, verifyPayload } from "./session-signing";
 
-const SESSION_COOKIE  = "zk_session";
-const SESSION_MAX_AGE = 60 * 60 * 8; // 8 hours
+const SESSION_COOKIE          = "zk_session";
+const SESSION_MAX_AGE         = 60 * 60 * 8;        // 8 hours  (default)
+const SESSION_MAX_AGE_PERSIST = 60 * 60 * 24 * 30;  // 30 days  (remember me)
 
 // ─── Session Payload ──────────────────────────────────────────
+// `persist` is stored on the payload so subsequent reissues (e.g. profile
+// edits that rewrite the cookie) preserve the original lifetime intent.
 export interface SessionPayload {
-  id:    string;  // Supabase auth.users UUID
-  email: string;
-  name:  string;  // display name (kept in sync with profiles.display_name)
-  role:  string;  // coarse role label — use effective flags for authorisation
+  id:       string;   // Supabase auth.users UUID
+  email:    string;
+  name:     string;   // display name (kept in sync with profiles.display_name)
+  role:     string;   // coarse role label — use effective flags for authorisation
+  persist?: boolean;  // true → long-lived "remember me" cookie
 }
 
 // ─── Write Session ────────────────────────────────────────────
@@ -43,7 +47,7 @@ export async function setSession(payload: SessionPayload): Promise<void> {
     secure:   process.env.NODE_ENV === "production",
     sameSite: "lax",
     path:     "/",
-    maxAge:   SESSION_MAX_AGE,
+    maxAge:   payload.persist ? SESSION_MAX_AGE_PERSIST : SESSION_MAX_AGE,
   });
 }
 

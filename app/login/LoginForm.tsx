@@ -83,11 +83,12 @@ function useTelemetry() {
 export default function LoginForm() {
   const bgRef = useRef<NetworkBgHandle | null>(null);
 
-  const [email,         setEmail]         = useState("");
-  const [password,      setPassword]      = useState("");
-  const [error,         setError]         = useState<string | null>(null);
-  const [loading,       setLoading]       = useState(false);
-  const [transitioning, setTransitioning] = useState(false);
+  const [email,          setEmail]          = useState("");
+  const [password,       setPassword]       = useState("");
+  const [persistSession, setPersistSession] = useState(false);
+  const [error,          setError]          = useState<string | null>(null);
+  const [loading,        setLoading]        = useState(false);
+  const [transitioning,  setTransitioning]  = useState(false);
 
   const { lines, push } = useTelemetry();
 
@@ -169,7 +170,7 @@ export default function LoginForm() {
       const res = await fetch("/api/auth/login", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ email: email.trim(), password }),
+        body:    JSON.stringify({ email: email.trim(), password, persistSession }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -239,7 +240,7 @@ export default function LoginForm() {
           />
           <AuthField
             id="password"
-            label="Access Token"
+            label="Password"
             type="password"
             value={password}
             onChange={setPassword}
@@ -257,12 +258,34 @@ export default function LoginForm() {
 
           {/* Helpers row */}
           <div className="flex items-center justify-between font-mono text-[10px] tracking-wider">
-            <label className="inline-flex items-center gap-2 text-zk-muted/70 cursor-pointer group select-none">
+            <label
+              className={`inline-flex items-center gap-2 cursor-pointer group select-none transition-colors ${
+                persistSession ? "text-zk-green/80" : "text-zk-muted/70"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={persistSession}
+                disabled={loading}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setPersistSession(on);
+                  push("CHECK", `persist session ${on ? "on (30d)" : "off (8h)"}`);
+                }}
+                className="sr-only"
+              />
               <span
                 className="w-3 h-3 border flex items-center justify-center transition-colors"
-                style={{ borderColor: "rgba(0,255,65,0.35)", background: "rgba(0,0,0,0.4)" }}
+                style={{
+                  borderColor: persistSession ? "rgba(0,255,65,0.75)" : "rgba(0,255,65,0.35)",
+                  background:  persistSession ? "rgba(0,255,65,0.12)" : "rgba(0,0,0,0.4)",
+                }}
               >
-                <span className="w-1.5 h-1.5 bg-zk-green opacity-0 group-hover:opacity-30 transition-opacity" />
+                <span
+                  className={`w-1.5 h-1.5 bg-zk-green transition-opacity ${
+                    persistSession ? "opacity-100" : "opacity-0 group-hover:opacity-30"
+                  }`}
+                />
               </span>
               <span className="group-hover:text-zk-green/70 transition-colors">
                 Persist session

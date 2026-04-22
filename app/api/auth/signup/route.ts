@@ -18,15 +18,23 @@ function getAnonClient() {
   );
 }
 
+// Same rule used by /api/profile and /api/auth/username-available
+const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{1,18}[a-z0-9]$/;
+
 export async function POST(req: NextRequest) {
-  let body: { email?: string; password?: string; displayName?: string };
+  let body: {
+    email?:       string;
+    password?:    string;
+    displayName?: string;
+    username?:    string;
+  };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const { email, password, displayName } = body;
+  const { email, password, displayName, username: rawUsername } = body;
 
   // ── Validate required fields ────────────────────────────────
   if (!email?.trim()) {
@@ -50,8 +58,29 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Derive username from email local part
-  const username = email.trim().toLowerCase().split("@")[0].replace(/[^a-z0-9._-]/g, "");
+  // ── Validate username (required, unique) ────────────────────
+  const username = (rawUsername ?? "").trim().toLowerCase();
+  if (!username) {
+    return NextResponse.json({ error: "Username is required." }, { status: 400 });
+  }
+  if (!USERNAME_RE.test(username)) {
+    return NextResponse.json(
+      { error: "3–20 chars: lowercase letters, numbers, dots, dashes, underscores." },
+      { status: 400 }
+    );
+  }
+
+  const { data: taken, error: takenErr } = await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .eq("username", username)
+    .maybeSingle();
+  if (takenErr) {
+    return NextResponse.json({ error: takenErr.message }, { status: 500 });
+  }
+  if (taken) {
+    return NextResponse.json({ error: "Username is already taken." }, { status: 409 });
+  }
 
   // ── Create auth user (service role — auto-confirms email) ───
   const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -87,6 +116,13 @@ export async function POST(req: NextRequest) {
   if (profileError) {
     // Roll back the auth user so the signup is fully atomic
     await supabaseAdmin.auth.admin.deleteUser(userId);
+    // Unique-index violation (e.g. concurrent signup grabbed the same username)
+    if (profileError.code === "23505") {
+      return NextResponse.json(
+        { error: "Username is already taken." },
+        { status: 409 },
+      );
+    }
     return NextResponse.json({ error: profileError.message }, { status: 500 });
   }
 

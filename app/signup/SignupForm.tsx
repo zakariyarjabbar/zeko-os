@@ -13,13 +13,13 @@ import {
 import { AuthField, type FieldState } from "@/components/ui/AuthField";
 import { type NetworkBgHandle } from "@/components/ui/NetworkBackground";
 
-// ─── Hex brand mark (signup-only, cyan) ───────────────────────
-function HexLogo() {
+// ─── Orbit ring brand mark (green, matches /login) ────────────
+function OrbitRing() {
   return (
     <div className="relative flex-shrink-0" style={{ width: 52, height: 52 }}>
       <motion.div
         className="absolute inset-0 rounded-full"
-        style={{ border: "1px solid rgba(0,212,255,0.22)" }}
+        style={{ border: "1px solid rgba(0,255,65,0.22)" }}
         animate={{ rotate: -360 }}
         transition={{ duration: 9, repeat: Infinity, ease: "linear" }}
       >
@@ -28,14 +28,14 @@ function HexLogo() {
           style={{
             top: -3, left: "50%", transform: "translateX(-50%)",
             width: 6, height: 6, borderRadius: "50%",
-            background: "#00D4FF",
-            boxShadow: "0 0 8px rgba(0,212,255,0.9), 0 0 16px rgba(0,212,255,0.4)",
+            background: "#00FF41",
+            boxShadow: "0 0 8px rgba(0,255,65,0.9), 0 0 16px rgba(0,255,65,0.4)",
           }}
         />
       </motion.div>
       <motion.div
         className="absolute rounded-full"
-        style={{ inset: 8, border: "1px dashed rgba(0,212,255,0.10)" }}
+        style={{ inset: 8, border: "1px dashed rgba(0,255,65,0.10)" }}
         animate={{ rotate: 360 }}
         transition={{ duration: 13, repeat: Infinity, ease: "linear" }}
       />
@@ -43,12 +43,12 @@ function HexLogo() {
         <div
           style={{
             width: "100%", height: "100%",
-            border: "1px solid rgba(0,212,255,0.28)",
-            background: "rgba(0,212,255,0.05)",
+            border: "1px solid rgba(0,255,65,0.28)",
+            background: "rgba(0,255,65,0.05)",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}
         >
-          <span className="font-mono text-[9px] font-bold tracking-tight select-none" style={{ color: "#00D4FF" }}>
+          <span className="font-mono text-[9px] font-bold tracking-tight select-none" style={{ color: "#00FF41" }}>
             +//
           </span>
         </div>
@@ -58,6 +58,8 @@ function HexLogo() {
 }
 
 // ─── Validation helpers ───────────────────────────────────────
+const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{1,18}[a-z0-9]$/;
+
 function emailLooksValid(v: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 }
@@ -68,6 +70,8 @@ function validateDisplayName(name: string): string | null {
   if ((t.match(/ /g) ?? []).length > 1) return "Display name may contain at most one space.";
   return null;
 }
+
+type UsernameStatus = "idle" | "invalid" | "checking" | "available" | "taken" | "error";
 
 // Password strength — 5 buckets: 0 (empty) through 4 (strong)
 interface PwScore { score: 0 | 1 | 2 | 3 | 4; label: string; hint: string }
@@ -112,6 +116,8 @@ export default function SignupForm() {
   const [email,         setEmail]         = useState("");
   const [password,      setPassword]      = useState("");
   const [displayName,   setDisplayName]   = useState("");
+  const [username,      setUsername]      = useState("");
+  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>("idle");
   const [error,         setError]         = useState<string | null>(null);
   const [loading,       setLoading]       = useState(false);
   const [transitioning, setTransitioning] = useState(false);
@@ -176,6 +182,77 @@ export default function SignupForm() {
     return validateDisplayName(displayName) ? "warn" : "valid";
   }, [displayName]);
 
+  const usernameState: FieldState = useMemo(() => {
+    switch (usernameStatus) {
+      case "available": return "valid";
+      case "taken":
+      case "invalid":
+      case "error":     return "warn";
+      default:          return "idle";
+    }
+  }, [usernameStatus]);
+
+  const usernameStatusLabel = useMemo(() => {
+    switch (usernameStatus) {
+      case "checking":  return "CHECKING…";
+      case "available": return "AVAILABLE";
+      case "taken":     return "TAKEN";
+      case "invalid":   return "FMT?";
+      case "error":     return "ERR";
+      default:          return undefined;
+    }
+  }, [usernameStatus]);
+
+  // Normalise username input: lowercase, strip disallowed chars (keeps feedback stable)
+  const handleUsernameChange = useCallback((v: string) => {
+    const cleaned = v.toLowerCase().replace(/[^a-z0-9._-]/g, "");
+    setUsername(cleaned);
+  }, []);
+
+  // Debounced availability check
+  useEffect(() => {
+    if (!username) {
+      setUsernameStatus("idle");
+      return;
+    }
+    if (!USERNAME_RE.test(username)) {
+      setUsernameStatus("invalid");
+      return;
+    }
+    setUsernameStatus("checking");
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/auth/username-available?username=${encodeURIComponent(username)}`,
+          { signal: controller.signal },
+        );
+        const data: { available: boolean; reason?: string } = await res.json();
+        if (controller.signal.aborted) return;
+        if (data.available) {
+          setUsernameStatus("available");
+          push("OK", `username "${username}" available`);
+        } else if (data.reason === "taken") {
+          setUsernameStatus("taken");
+          push("WARN", `username "${username}" taken`);
+        } else if (data.reason === "format") {
+          setUsernameStatus("invalid");
+        } else {
+          setUsernameStatus("error");
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setUsernameStatus("error");
+          void err;
+        }
+      }
+    }, 350);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [username, push]);
+
   // Log strength transitions (not every keystroke)
   const lastPwLabel = useRef<string>("empty");
   useEffect(() => {
@@ -185,20 +262,21 @@ export default function SignupForm() {
     }
   }, [pw.label, push]);
 
-  const filledCount = [email, password, displayName].filter(Boolean).length;
+  const filledCount =
+    [email, password, displayName, username].filter(Boolean).length;
 
   // ── Submit ──────────────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
-    if (!email.trim() || !password || !displayName.trim()) {
+    if (!email.trim() || !password || !displayName.trim() || !username.trim()) {
       setError("All fields are required.");
       push("ERR", "missing fields");
       return;
     }
     if (password.length < 8) {
-      setError("Access token must be at least 8 characters.");
+      setError("Password must be at least 8 characters.");
       push("ERR", "password too short");
       return;
     }
@@ -206,6 +284,20 @@ export default function SignupForm() {
     if (dnErr) {
       setError(dnErr);
       push("ERR", "display name invalid");
+      return;
+    }
+    if (!USERNAME_RE.test(username)) {
+      setError("Username must be 3–20 chars: lowercase letters, numbers, dots, dashes, underscores.");
+      push("ERR", "username format invalid");
+      return;
+    }
+    if (usernameStatus === "taken") {
+      setError("Username is already taken.");
+      push("ERR", "username taken");
+      return;
+    }
+    if (usernameStatus === "checking") {
+      setError("Still checking username availability…");
       return;
     }
 
@@ -219,10 +311,12 @@ export default function SignupForm() {
           email:       email.trim(),
           password,
           displayName: displayName.trim(),
+          username:    username.trim().toLowerCase(),
         }),
       });
       const data = await res.json();
       if (!res.ok) {
+        if (res.status === 409) setUsernameStatus("taken");
         setError(data.error ?? "Registration failed. Please try again.");
         push("ERR", data.error?.toLowerCase() ?? "registration rejected");
         return;
@@ -239,7 +333,7 @@ export default function SignupForm() {
     }
   }
 
-  const accent = ACCENTS.cyan;
+  const accent = ACCENTS.green;
 
   return (
     <>
@@ -248,7 +342,7 @@ export default function SignupForm() {
       )}
 
       <AuthShell
-        accent="cyan"
+        accent="green"
         backHref="/login"
         backLabel="Back to login"
         moduleLabel="Node Registration"
@@ -256,7 +350,7 @@ export default function SignupForm() {
         subtitle="Provision a new identity on the network."
         statusLabel="OPEN"
         statusSubLabel="SLOTS AVAILABLE"
-        logo={<HexLogo />}
+        logo={<OrbitRing />}
         stats={[
           { key: "NODES",  value: stats.nodes.toString() },
           { key: "PKT/S",  value: `${stats.pps}k` },
@@ -266,7 +360,7 @@ export default function SignupForm() {
         telemetryTitle="REGISTRATION STREAM"
         telemetry={lines}
         bgRef={bgRef}
-        shortcutHint={`⏎ SUBMIT · ${filledCount}/3 FIELDS`}
+        shortcutHint={`⏎ SUBMIT · ${filledCount}/4 FIELDS`}
       >
         <form onSubmit={handleSubmit} noValidate className="space-y-5">
           <AuthField
@@ -286,10 +380,27 @@ export default function SignupForm() {
             onFieldFocus={(id) => push("FIELD", `${id} focused`)}
           />
 
+          <AuthField
+            id="username"
+            label="Username"
+            hint="3–20 chars · a-z 0-9 . _ -"
+            type="text"
+            value={username}
+            onChange={handleUsernameChange}
+            accent={accent}
+            placeholder="node_operator"
+            disabled={loading}
+            autoComplete="username"
+            state={usernameState}
+            statusLabel={usernameStatusLabel}
+            onType={() => { triggerRipple(); emitType("username", username.length + 1); }}
+            onFieldFocus={(id) => push("FIELD", `${id} focused`)}
+          />
+
           <div>
             <AuthField
               id="password"
-              label="Access Token"
+              label="Password"
               hint="min 8 chars"
               type="password"
               value={password}
@@ -311,7 +422,7 @@ export default function SignupForm() {
 
           <AuthField
             id="displayName"
-            label="Node Alias"
+            label="Display Name"
             hint="one space allowed"
             type="text"
             value={displayName}
@@ -319,9 +430,9 @@ export default function SignupForm() {
             accent={accent}
             placeholder="John Doe"
             disabled={loading}
-            autoComplete="off"
+            autoComplete="name"
             state={nameState}
-            onType={() => { triggerRipple(); emitType("alias", displayName.length + 1); }}
+            onType={() => { triggerRipple(); emitType("display", displayName.length + 1); }}
             onFieldFocus={(id) => push("FIELD", `${id} focused`)}
           />
 
@@ -347,28 +458,28 @@ export default function SignupForm() {
             disabled={loading}
             className="relative w-full overflow-hidden font-mono text-sm tracking-[0.18em] uppercase py-3 px-6 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed group"
             style={{
-              border: "1px solid rgba(0,212,255,0.4)",
-              background: "rgba(0,212,255,0.05)",
-              color: "#00D4FF",
-              boxShadow: loading ? "0 0 20px rgba(0,212,255,0.14)" : "none",
+              border: "1px solid rgba(0,255,65,0.45)",
+              background: "rgba(0,255,65,0.06)",
+              color: "#00FF41",
+              boxShadow: loading ? "0 0 20px rgba(0,255,65,0.15)" : "none",
             }}
             onMouseEnter={(e) => {
               if (!loading) {
-                e.currentTarget.style.background = "rgba(0,212,255,0.09)";
-                e.currentTarget.style.boxShadow = "0 0 24px rgba(0,212,255,0.22)";
-                e.currentTarget.style.borderColor = "rgba(0,212,255,0.7)";
+                e.currentTarget.style.background = "rgba(0,255,65,0.10)";
+                e.currentTarget.style.boxShadow = "0 0 24px rgba(0,255,65,0.25)";
+                e.currentTarget.style.borderColor = "rgba(0,255,65,0.75)";
               }
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = "rgba(0,212,255,0.05)";
+              e.currentTarget.style.background = "rgba(0,255,65,0.06)";
               e.currentTarget.style.boxShadow = "none";
-              e.currentTarget.style.borderColor = "rgba(0,212,255,0.4)";
+              e.currentTarget.style.borderColor = "rgba(0,255,65,0.45)";
             }}
           >
             <div
               className="absolute inset-0 pointer-events-none -translate-x-full group-hover:translate-x-full transition-transform duration-700"
               style={{
-                background: "linear-gradient(90deg, transparent 0%, rgba(0,212,255,0.06) 50%, transparent 100%)",
+                background: "linear-gradient(90deg, transparent 0%, rgba(0,255,65,0.06) 50%, transparent 100%)",
               }}
             />
             <span className="relative flex items-center justify-center gap-3">
@@ -378,8 +489,7 @@ export default function SignupForm() {
                     {[0, 1, 2].map((i) => (
                       <motion.span
                         key={i}
-                        className="inline-block w-1.5 h-1.5 rounded-full"
-                        style={{ background: "#00D4FF" }}
+                        className="inline-block w-1.5 h-1.5 rounded-full bg-zk-green"
                         animate={{ opacity: [0.3, 1, 0.3] }}
                         transition={{ duration: 0.9, delay: i * 0.2, repeat: Infinity }}
                       />
@@ -402,8 +512,7 @@ export default function SignupForm() {
           Already registered?{" "}
           <Link
             href="/login"
-            className="hover:text-zk-green transition-colors duration-150"
-            style={{ color: "rgba(0,212,255,0.65)" }}
+            className="text-zk-green/70 hover:text-zk-green transition-colors duration-150"
           >
             Connect to node
           </Link>
@@ -413,11 +522,11 @@ export default function SignupForm() {
   );
 }
 
-// ─── Strength meter ───────────────────────────────────────────
+// ─── Strength meter (all-green) ───────────────────────────────
 function StrengthMeter({ score, hint }: { score: 0 | 1 | 2 | 3 | 4; hint: string }) {
   const labelColor =
       score >= 4 ? "#00FF41"
-    : score === 3 ? "#00D4FF"
+    : score === 3 ? "rgba(0,255,65,0.75)"
     : score === 2 ? "#FFB800"
     : score >= 1 ? "rgba(255,184,0,0.75)"
     : "rgba(107,122,107,0.7)";
@@ -425,7 +534,7 @@ function StrengthMeter({ score, hint }: { score: 0 | 1 | 2 | 3 | 4; hint: string
   const barColors = [
     "rgba(255,59,59,0.75)",   // 1 — weak
     "rgba(255,184,0,0.8)",    // 2 — fair
-    "rgba(0,212,255,0.8)",    // 3 — good
+    "rgba(0,255,65,0.6)",     // 3 — good
     "#00FF41",                // 4 — strong
   ];
 
@@ -440,7 +549,7 @@ function StrengthMeter({ score, hint }: { score: 0 | 1 | 2 | 3 | 4; hint: string
               className="h-[3px] flex-1"
               initial={false}
               animate={{
-                background: active ? barColors[Math.min(score - 1, 3)] : "rgba(0,212,255,0.08)",
+                background: active ? barColors[Math.min(score - 1, 3)] : "rgba(0,255,65,0.08)",
                 boxShadow:  active ? `0 0 6px ${barColors[Math.min(score - 1, 3)]}50` : "none",
               }}
               transition={{ duration: 0.2 }}
