@@ -31,11 +31,15 @@ export const viewport: Viewport = {
 
 // ─── Metadata ────────────────────────────────────────────────
 export const metadata: Metadata = {
-  title: "zeko OS",
+  title: "ZEKO_OS",
   description:
     "Zeko OS is a precision-engineered digital environment built for performance, security, and scale. Initializing now.",
   keywords: [
     "Zeko OS",
+    "ZEKO_OS",
+    "Zeko Operating System",
+    "Zeko",
+    "Zeko OS by Zakariya Jabbar",
     "Zakariya Jabbar",
     "Full-Stack Development",
     "System Architecture",
@@ -44,7 +48,7 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "Zakariya Jabbar", url: "https://zeko.os" }],
   openGraph: {
-    title: "Zeko OS",
+    title: "ZEKO_OS",
     description: "High-Performance Digital Environment",
     type: "website",
   },
