@@ -401,6 +401,41 @@ export default function OverviewPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── Live presence polling for all users ──────────────────
+  // The SSE stream only watches DM partners, so the radar would stay stale
+  // for other users. We poll /api/presence for everyone in the list and
+  // patch session_status in-place — same approach as /system/users.
+  const pollPresence = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return;
+    try {
+      const res = await fetch(`/api/presence?ids=${ids.join(",")}`);
+      if (!res.ok) return;
+      const map: Record<string, "ONLINE" | "OFFLINE"> = await res.json();
+      setUsers((prev) =>
+        prev.map((u) => {
+          const next = map[u.id];
+          if (!next || !u.profile || u.profile.session_status === next) return u;
+          return { ...u, profile: { ...u.profile, session_status: next } };
+        }),
+      );
+    } catch { /* silent — stale data is acceptable */ }
+  }, []);
+
+  // Poll once on mount and again whenever the user list refreshes.
+  useEffect(() => {
+    const ids = users.map((u) => u.id);
+    if (ids.length > 0) pollPresence(ids);
+  }, [users, pollPresence]);
+
+  // Periodic refresh — keep radar accurate to within 12 s.
+  useEffect(() => {
+    const id = setInterval(() => {
+      const ids = getAppCache().getUsers()?.map((u) => u.id) ?? [];
+      if (ids.length > 0) pollPresence(ids);
+    }, 12_000);
+    return () => clearInterval(id);
+  }, [pollPresence]);
+
   // ── Cache event listeners ─────────────────────────────────
   useEffect(() => {
     function onUsers() {
@@ -424,13 +459,30 @@ export default function OverviewPage() {
       if (unread) pushLine("MSG", `INBOX // ${unread} MESSAGES PENDING REVIEW`);
     }
 
+    // Presence events arrive via SSE → ShellPrefetcher → getChatCache().setPresence()
+    // → "zk:cache:presence". Patch session_status in-place so the radar and roster
+    // update immediately without waiting for the 90-second users cache refresh.
+    function onPresence() {
+      const presMap = getChatCache().getPresence();
+      if (!presMap) return;
+      setUsers((prev) =>
+        prev.map((u) => {
+          const next = presMap[u.id] as "ONLINE" | "OFFLINE" | undefined;
+          if (!next || !u.profile || u.profile.session_status === next) return u;
+          return { ...u, profile: { ...u.profile, session_status: next } };
+        }),
+      );
+    }
+
     window.addEventListener("zk:cache:users",    onUsers);
     window.addEventListener("zk:cache:channels", onChannels);
     window.addEventListener("zk:cache:inbox",    onInbox);
+    window.addEventListener("zk:cache:presence", onPresence);
     return () => {
       window.removeEventListener("zk:cache:users",    onUsers);
       window.removeEventListener("zk:cache:channels", onChannels);
       window.removeEventListener("zk:cache:inbox",    onInbox);
+      window.removeEventListener("zk:cache:presence", onPresence);
     };
   }, [pushLine]);
 
@@ -561,7 +613,7 @@ export default function OverviewPage() {
               ))}
             </div>
 
-            <div className="flex-1 overflow-y-auto divide-y divide-zk-border/15">
+            <div className="flex-1 overflow-y-auto">
               {!canSeeUsers && operators.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-24 gap-2">
                   <span className="font-mono text-xs text-zk-muted/25">INSUFFICIENT CLEARANCE</span>
@@ -580,7 +632,8 @@ export default function OverviewPage() {
                 return (
                   <div
                     key={op.id}
-                    className="grid grid-cols-[20px_1fr_1fr_72px_32px] gap-x-3 px-4 py-2 hover:bg-zk-green/[0.025] transition-colors duration-100"
+                    className="grid grid-cols-[20px_1fr_1fr_72px_32px] gap-x-3 px-4 py-2 hover:bg-zk-green/[0.025] transition-[background-color] duration-100"
+                    style={{ borderBottom: "1px solid rgba(0,255,65,0.06)" }}
                   >
                     <div className="flex items-center">
                       <span className={cn(
