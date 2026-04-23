@@ -31,13 +31,23 @@ export const REQUEST_PER_EMAIL_HOUR   = 5;
 export const REQUEST_PER_IP_15M       = 10;
 export const VERIFY_PER_IP_15M        = 20;
 
+// Login / signup buckets (credential-stuffing + brute-force defense).
+export const LOGIN_PER_IP_15M         = 30;    // any outcome — blocks scripted stuffing
+export const LOGIN_FAIL_PER_EMAIL_15M = 10;    // fails only — brute-force per account
+export const SIGNUP_PER_IP_HOUR       = 5;     // signups are rare; tighter bucket
+
 // ─── Event kinds ──────────────────────────────────────────────
 export type AuthEventKind =
   | "reset_request"
   | "reset_request_rl"    // rate-limited at the request endpoint
   | "reset_verify_ok"
   | "reset_verify_fail"
-  | "reset_verify_rl";    // rate-limited at the verify endpoint
+  | "reset_verify_rl"     // rate-limited at the verify endpoint
+  | "login_attempt"       // any login request that passed rate-limit
+  | "login_fail"          // login that failed credential check
+  | "login_rl"            // rate-limited at the login endpoint
+  | "signup_attempt"      // any signup request that passed rate-limit
+  | "signup_rl";          // rate-limited at the signup endpoint
 
 // ─── IP / UA extraction ───────────────────────────────────────
 // x-forwarded-for may be a comma-separated list appended by each
@@ -145,6 +155,42 @@ export async function checkVerifyRateLimit(ip: string): Promise<RateLimitVerdict
   });
   if (ipCount >= VERIFY_PER_IP_15M) {
     return { ok: false, retryInSeconds: 900, reason: "ip_verify_limit" };
+  }
+  return { ok: true };
+}
+
+export async function checkLoginRateLimit(
+  email: string,
+  ip:    string,
+): Promise<RateLimitVerdict> {
+  // 1. Per-IP across any outcome — stops scripted credential stuffing that
+  //    rotates the email on each try.
+  const ipCount = await countEvents({
+    kind: "login_attempt", ip, windowSeconds: 900,
+  });
+  if (ipCount >= LOGIN_PER_IP_15M) {
+    return { ok: false, retryInSeconds: 900, reason: "ip_limit" };
+  }
+
+  // 2. Per-email failures only — brute-forcing a single account locks out
+  //    that account, but a legit user's successful login doesn't consume
+  //    the bucket.
+  const emailFails = await countEvents({
+    kind: "login_fail", email, windowSeconds: 900,
+  });
+  if (emailFails >= LOGIN_FAIL_PER_EMAIL_15M) {
+    return { ok: false, retryInSeconds: 900, reason: "email_fail_limit" };
+  }
+
+  return { ok: true };
+}
+
+export async function checkSignupRateLimit(ip: string): Promise<RateLimitVerdict> {
+  const ipCount = await countEvents({
+    kind: "signup_attempt", ip, windowSeconds: 3600,
+  });
+  if (ipCount >= SIGNUP_PER_IP_HOUR) {
+    return { ok: false, retryInSeconds: 3600, reason: "ip_limit" };
   }
   return { ok: true };
 }

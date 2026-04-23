@@ -421,19 +421,37 @@ export default function OverviewPage() {
     } catch { /* silent — stale data is acceptable */ }
   }, []);
 
-  // Poll once on mount and again whenever the user list refreshes.
+  // Keep a ref of current user IDs so the polling interval never needs
+  // `users` in its dep array — prevents the setUsers → users → re-fire loop.
+  const userIdsRef = useRef<string[]>([]);
   useEffect(() => {
-    const ids = users.map((u) => u.id);
-    if (ids.length > 0) pollPresence(ids);
-  }, [users, pollPresence]);
+    userIdsRef.current = users.map((u) => u.id);
+  }, [users]);
 
-  // Periodic refresh — keep radar accurate to within 12 s.
+  // Periodic presence refresh — fires once ~2 s after mount (users should
+  // be loaded by then) then every 15 s.  Reading from the ref instead of
+  // from `users` state means pollPresence → setUsers → users change is
+  // invisible to this effect and the loop is broken.
   useEffect(() => {
-    const id = setInterval(() => {
-      const ids = getAppCache().getUsers()?.map((u) => u.id) ?? [];
+    const getIds = () =>
+      userIdsRef.current.length
+        ? userIdsRef.current
+        : (getAppCache().getUsers()?.map((u) => u.id) ?? []);
+
+    const onMount = setTimeout(() => {
+      const ids = getIds();
       if (ids.length > 0) pollPresence(ids);
-    }, 12_000);
-    return () => clearInterval(id);
+    }, 2_000);
+
+    const interval = setInterval(() => {
+      const ids = getIds();
+      if (ids.length > 0) pollPresence(ids);
+    }, 15_000);
+
+    return () => {
+      clearTimeout(onMount);
+      clearInterval(interval);
+    };
   }, [pollPresence]);
 
   // ── Cache event listeners ─────────────────────────────────
@@ -442,6 +460,9 @@ export default function OverviewPage() {
       const u = getAppCache().getUsers();
       if (!u) return;
       setUsers(u);
+      // Immediately patch presence for the freshly-loaded list so the radar
+      // shows current statuses without waiting for the next 15-s interval.
+      pollPresence(u.map((x) => x.id));
       const on = u.filter((x) => x.profile?.session_status === "ONLINE").length;
       pushLine("PRESENCE", `SCAN COMPLETE // ${on} ONLINE · ${u.length - on} OFFLINE`);
     }
@@ -484,7 +505,7 @@ export default function OverviewPage() {
       window.removeEventListener("zk:cache:inbox",    onInbox);
       window.removeEventListener("zk:cache:presence", onPresence);
     };
-  }, [pushLine]);
+  }, [pushLine, pollPresence]);
 
   // ── Periodic SIGINT heartbeat ─────────────────────────────
   useEffect(() => {

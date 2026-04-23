@@ -8,6 +8,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient }              from "@supabase/supabase-js";
 import { supabaseAdmin }             from "@/lib/supabase/server";
 import { setSession }                from "@/lib/auth";
+import {
+  checkSignupRateLimit,
+  getClientIp,
+  logAuthEvent,
+} from "@/lib/password-reset";
 
 // Use anon key — same pattern as login route
 function getAnonClient() {
@@ -47,6 +52,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
   }
 
+  const normalizedEmail = email.trim().toLowerCase();
+  const ip = getClientIp(req);
+
+  // ── Rate-limit check ────────────────────────────────────────
+  // Per-IP only — signups are rare legitimate events, so capping by IP
+  // stops automated account creation without tracking by email.
+  const rl = await checkSignupRateLimit(ip);
+  if (!rl.ok) {
+    await logAuthEvent("signup_rl", { email: normalizedEmail, ip });
+    return NextResponse.json(
+      {
+        error:          "Too many signup attempts. Please wait before trying again.",
+        retryInSeconds: rl.retryInSeconds ?? 3600,
+      },
+      { status: 429, headers: { "Retry-After": String(rl.retryInSeconds ?? 3600) } },
+    );
+  }
+
+  await logAuthEvent("signup_attempt", { email: normalizedEmail, ip });
+
   const cleanDisplay = (displayName ?? "").trim();
   if (!cleanDisplay) {
     return NextResponse.json({ error: "Display name is required." }, { status: 400 });
@@ -84,7 +109,7 @@ export async function POST(req: NextRequest) {
 
   // ── Create auth user (service role — auto-confirms email) ───
   const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-    email:         email.trim().toLowerCase(),
+    email:         normalizedEmail,
     password,
     email_confirm: true,
     user_metadata: { name: cleanDisplay, role: "user" },
@@ -129,7 +154,7 @@ export async function POST(req: NextRequest) {
   // ── Sign in to verify credentials + set session cookie ──────
   const anonClient = getAnonClient();
   const { data: signInData, error: signInError } = await anonClient.auth.signInWithPassword({
-    email:    email.trim().toLowerCase(),
+    email:    normalizedEmail,
     password,
   });
 
@@ -140,7 +165,7 @@ export async function POST(req: NextRequest) {
 
   await setSession({
     id:    userId,
-    email: email.trim().toLowerCase(),
+    email: normalizedEmail,
     name:  cleanDisplay,
     role:  "user",
   });

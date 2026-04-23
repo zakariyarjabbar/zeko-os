@@ -8,6 +8,11 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { getEffectiveFlags } from "@/lib/effective-flags";
 import { setSession } from "@/lib/auth";
 import { asUserId } from "@/lib/types/ids";
+import {
+  checkLoginRateLimit,
+  getClientIp,
+  logAuthEvent,
+} from "@/lib/password-reset";
 
 // Use anon key for sign-in — never the service role
 function getAnonClient() {
@@ -33,15 +38,38 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Email and password are required." }, { status: 400 });
   }
 
+  const normalizedEmail = email.trim().toLowerCase();
+  const ip = getClientIp(req);
+
+  // ── Rate-limit check ─────────────────────────────────────────
+  // Blocks credential stuffing (per-IP across any outcome) and
+  // per-account brute force (per-email failed attempts only).
+  const rl = await checkLoginRateLimit(normalizedEmail, ip);
+  if (!rl.ok) {
+    await logAuthEvent("login_rl", { email: normalizedEmail, ip });
+    return NextResponse.json(
+      {
+        error:          "Too many login attempts. Please wait before trying again.",
+        retryInSeconds: rl.retryInSeconds ?? 900,
+      },
+      { status: 429, headers: { "Retry-After": String(rl.retryInSeconds ?? 900) } },
+    );
+  }
+
+  // Record the attempt before hitting Supabase so the per-IP bucket
+  // counts requests regardless of whether the upstream call finishes.
+  await logAuthEvent("login_attempt", { email: normalizedEmail, ip });
+
   // ── Sign in via Supabase Auth ────────────────────────────────
   const client = getAnonClient();
   const { data, error } = await client.auth.signInWithPassword({
-    email: email.trim().toLowerCase(),
+    email: normalizedEmail,
     password,
   });
 
   if (error || !data.user) {
     console.error("[login] auth error:", error?.message);
+    await logAuthEvent("login_fail", { email: normalizedEmail, ip, success: false });
     return NextResponse.json({ error: "Invalid credentials." }, { status: 401 });
   }
 
