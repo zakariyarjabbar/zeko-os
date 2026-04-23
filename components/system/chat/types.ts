@@ -2,12 +2,15 @@
 // Shared chat types.
 
 export interface Channel {
-  id:          string;
-  label:       string;
-  unread:      number;
-  memberCount: number;
-  topic:       string;
-  permissions: string[]; // ['view_channel', 'send_message', 'delete_message']
+  id:               string;
+  label:            string;
+  unread:           number;
+  memberCount:      number;
+  topic:            string;
+  permissions:      string[];
+  isPublic:         boolean;
+  viewPermission:   string | null;
+  deletePermission: string | null;
 }
 
 export interface ChatMessage {

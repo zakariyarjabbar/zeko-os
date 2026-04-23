@@ -725,6 +725,58 @@ export default function ChatPage() {
     handleSelect(`dm:${userId}`, "dm", userId, username);
   }
 
+  // ── Create channel ─────────────────────────────────────────
+  async function handleCreateChannel(
+    label: string, topic: string,
+    isPublic: boolean, viewPermission: string | null, deletePermission: string | null,
+  ) {
+    const res = await fetch("/api/chat/channels", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ label, topic, isPublic, viewPermission, deletePermission }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error ?? "Failed to create channel");
+    }
+    getChatCache().invalidateChannels();
+    await fetchChannels();
+  }
+
+  // ── Edit channel ───────────────────────────────────────────
+  async function handleEditChannel(
+    id: string, label: string, topic: string,
+    isPublic: boolean, viewPermission: string | null, deletePermission: string | null,
+  ) {
+    const res = await fetch("/api/chat/channels", {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ id, label, topic, isPublic, viewPermission, deletePermission }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error ?? "Failed to update channel");
+    }
+    getChatCache().invalidateChannels();
+    await fetchChannels();
+  }
+
+  // ── Delete channel ─────────────────────────────────────────
+  async function handleDeleteChannel(channelId: string) {
+    const res = await fetch(`/api/chat/channels?id=${encodeURIComponent(channelId)}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error ?? "Failed to delete channel");
+    }
+    getChatCache().invalidateChannels();
+    await fetchChannels();
+    // If the deleted channel was active, switch to first remaining channel
+    if (activeChannel === channelId && !isDm) {
+      const remaining = channels.filter((c) => c.id !== channelId);
+      if (remaining.length > 0) handleSelect(remaining[0].id, "channel");
+    }
+  }
+
   // ── Derived header values ──────────────────────────────────
   // conversationKey changes whenever the user switches channel/DM.
   // MessageLog uses it to reset its "seenIds" tracker so only messages
@@ -756,6 +808,10 @@ export default function ChatPage() {
         loadingChannels={loadingChannels}
         loadingDms={loadingDms}
         presence={presence}
+        isAdmin={isAdmin}
+        onCreateChannel={handleCreateChannel}
+        onEditChannel={handleEditChannel}
+        onDeleteChannel={handleDeleteChannel}
       />
 
       {/* ── Main area ───────────────────────────────────── */}

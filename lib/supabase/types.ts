@@ -15,7 +15,7 @@ export type Database = {
           display_id:     number;
           display_name:   string;
           username:       string;
-          access_flags:   Permission[];
+          access_flags:   string[];            // permission UUIDs
           session_status: "ONLINE" | "OFFLINE" | "AWAY";
           last_login_ip:  string;
           last_active:    string;
@@ -25,7 +25,7 @@ export type Database = {
           id:              UserId;
           display_name?:   string;
           username:        string;
-          access_flags?:   Permission[];
+          access_flags?:   string[];           // permission UUIDs
           session_status?: "ONLINE" | "OFFLINE" | "AWAY";
           last_login_ip?:  string;
           last_active?:    string;
@@ -34,7 +34,7 @@ export type Database = {
         Update: {
           display_name?:   string;
           username?:       string;
-          access_flags?:   Permission[];
+          access_flags?:   string[];           // permission UUIDs
           session_status?: "ONLINE" | "OFFLINE" | "AWAY";
           last_login_ip?:  string;
           last_active?:    string;
@@ -43,22 +43,28 @@ export type Database = {
 
       channels: {
         Row: {
-          id:           ChannelId;
-          label:        string;
-          topic:        string;
-          member_count: number;
-          created_at:   string;
+          id:                ChannelId;
+          label:             string;
+          topic:             string;
+          public:            boolean;
+          view_permission:   string | null;
+          delete_permission: string | null;
+          created_at:        string;
         };
         Insert: {
-          id:            ChannelId;
-          label:         string;
-          topic?:        string;
-          member_count?: number;
+          id:                 ChannelId;
+          label:              string;
+          topic?:             string;
+          public?:            boolean;
+          view_permission?:   string | null;
+          delete_permission?: string | null;
         };
         Update: {
-          label?:        string;
-          topic?:        string;
-          member_count?: number;
+          label?:             string;
+          topic?:             string;
+          public?:            boolean;
+          view_permission?:   string | null;
+          delete_permission?: string | null;
         };
       };
 
@@ -113,18 +119,18 @@ export type Database = {
           id:          RoleId;
           name:        string;
           description: string;
-          permissions: Permission[];
+          permissions: string[];   // permission UUIDs
           created_at:  string;
         };
         Insert: {
           name:         string;
           description?: string;
-          permissions?: Permission[];
+          permissions?: string[];  // permission UUIDs
         };
         Update: {
           name?:        string;
           description?: string;
-          permissions?: Permission[];
+          permissions?: string[];  // permission UUIDs
         };
       };
 
