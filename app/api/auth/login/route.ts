@@ -11,6 +11,7 @@ import { asUserId } from "@/lib/types/ids";
 import {
   checkLoginRateLimit,
   getClientIp,
+  getUserAgent,
   logAuthEvent,
 } from "@/lib/password-reset";
 
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
 
   const normalizedEmail = email.trim().toLowerCase();
   const ip = getClientIp(req);
+  const userAgent = getUserAgent(req);
 
   // ── Rate-limit check ─────────────────────────────────────────
   // Blocks credential stuffing (per-IP across any outcome) and
@@ -99,12 +101,18 @@ export async function POST(req: NextRequest) {
     email.split("@")[0];
 
   // ── Set session cookie ───────────────────────────────────────
+  // IP + UA are recorded on the user_sessions row so the Active
+  // Sessions panel can show them. Other fields (email/name/role)
+  // are resolved fresh from the DB on every getSession() call,
+  // so we don't need to keep them in sync on the cookie.
   await setSession({
-    id:      user.id,
-    email:   user.email!,
-    name:    displayName,
+    id:        user.id,
+    email:     user.email!,
+    name:      displayName,
     role,
-    persist: persistSession === true,
+    persist:   persistSession === true,
+    ip,
+    userAgent,
   });
 
   return NextResponse.json({ ok: true, name: displayName });

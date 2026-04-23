@@ -11,6 +11,7 @@ import { setSession }                from "@/lib/auth";
 import {
   checkSignupRateLimit,
   getClientIp,
+  getUserAgent,
   logAuthEvent,
 } from "@/lib/password-reset";
 
@@ -54,6 +55,7 @@ export async function POST(req: NextRequest) {
 
   const normalizedEmail = email.trim().toLowerCase();
   const ip = getClientIp(req);
+  const userAgent = getUserAgent(req);
 
   // ── Rate-limit check ────────────────────────────────────────
   // Per-IP only — signups are rare legitimate events, so capping by IP
@@ -164,10 +166,12 @@ export async function POST(req: NextRequest) {
   }
 
   await setSession({
-    id:    userId,
-    email: normalizedEmail,
-    name:  cleanDisplay,
-    role:  "user",
+    id:        userId,
+    email:     normalizedEmail,
+    name:      cleanDisplay,
+    role:      "user",
+    ip,
+    userAgent,
   });
 
   return NextResponse.json({ ok: true });

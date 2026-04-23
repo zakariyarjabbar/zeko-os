@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { cn }         from "@/lib/utils";
 import { useProfile, useSession } from "@/components/system/SessionContext";
+import { ActiveSessions }         from "./ActiveSessions";
 
 // ─── Primitives ───────────────────────────────────────────────
 
@@ -439,6 +440,9 @@ export default function ProfilePage() {
 
         {/* Account info — full width */}
         <AccountInfo />
+
+        {/* Active sessions — full width */}
+        <ActiveSessions />
 
       </div>
     </div>

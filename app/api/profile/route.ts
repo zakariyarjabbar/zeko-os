@@ -5,10 +5,11 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient }              from "@supabase/supabase-js";
-import { getSession, setSession }    from "@/lib/auth";
+import { getSession }                from "@/lib/auth";
 import { supabaseAdmin }             from "@/lib/supabase/server";
 import { getEffectiveFlags }         from "@/lib/effective-flags";
 import { asUserId }                  from "@/lib/types/ids";
+import { revokeAllOthersForUser }    from "@/lib/sessions";
 
 function anonClient() {
   return createClient(
@@ -61,6 +62,11 @@ export async function PATCH(req: NextRequest) {
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+    // A successful password change forcibly signs the user out of every
+    // other device. The current session stays valid so the UI can show
+    // "password updated" without kicking them out of the tab they're on.
+    await revokeAllOthersForUser(session.id, session.sid);
+
     return NextResponse.json({ ok: true });
   }
 
@@ -111,9 +117,9 @@ export async function PATCH(req: NextRequest) {
     .eq("id", session.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Keep the session cookie name in sync when display_name changes
-  if (profileUpdate.display_name)
-    await setSession({ ...session, name: profileUpdate.display_name as string });
+  // (No cookie re-issue needed: display_name is resolved fresh from the
+  // profiles table on every getSession() call — the cookie holds only
+  // the session id, not a display-name snapshot.)
 
   return NextResponse.json({ ok: true });
 }

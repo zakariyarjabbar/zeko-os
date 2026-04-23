@@ -35,10 +35,12 @@ import {
   checkVerifyRateLimit,
   findActiveCode,
   getClientIp,
+  getUserAgent,
   incrementAttempts,
   logAuthEvent,
   markConsumed,
 } from "@/lib/password-reset";
+import { revokeAllForUser } from "@/lib/sessions";
 
 function getAnonClient() {
   return createClient(
@@ -56,6 +58,7 @@ const GENERIC_INVALID = "Invalid or expired code. Request a new one.";
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req);
+  const userAgent = getUserAgent(req);
 
   // ── Parse + format gate ──────────────────────────────────────
   let body: { email?: string; code?: string; newPassword?: string };
@@ -168,11 +171,21 @@ export async function POST(req: NextRequest) {
     p?.username ||
     (user.email ?? "user").split("@")[0];
 
+  // ── Blast-radius containment ─────────────────────────────────
+  // A password reset is a trust-boundary event: the actor either forgot
+  // their password, OR an attacker is stealing the account. In both
+  // cases, every pre-existing signed-in device for this user should
+  // lose its session. If the legit user was actually signed in
+  // elsewhere, they can sign back in with their new password.
+  await revokeAllForUser(user.id);
+
   await setSession({
-    id:    user.id,
-    email: user.email!,
-    name:  displayName,
+    id:        user.id,
+    email:     user.email!,
+    name:      displayName,
     role,
+    ip,
+    userAgent,
   });
 
   return NextResponse.json({ ok: true });
