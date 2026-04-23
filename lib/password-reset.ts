@@ -39,15 +39,20 @@ export const SIGNUP_PER_IP_HOUR       = 5;     // signups are rare; tighter buck
 // ─── Event kinds ──────────────────────────────────────────────
 export type AuthEventKind =
   | "reset_request"
-  | "reset_request_rl"    // rate-limited at the request endpoint
+  | "reset_request_rl"      // rate-limited at the request endpoint
   | "reset_verify_ok"
   | "reset_verify_fail"
-  | "reset_verify_rl"     // rate-limited at the verify endpoint
-  | "login_attempt"       // any login request that passed rate-limit
-  | "login_fail"          // login that failed credential check
-  | "login_rl"            // rate-limited at the login endpoint
-  | "signup_attempt"      // any signup request that passed rate-limit
-  | "signup_rl";          // rate-limited at the signup endpoint
+  | "reset_verify_rl"       // rate-limited at the verify endpoint
+  | "login_attempt"         // any login request that passed rate-limit
+  | "login_fail"            // login that failed credential check
+  | "login_rl"              // rate-limited at the login endpoint
+  | "signup_attempt"        // any signup request that passed rate-limit
+  | "signup_rl"             // rate-limited at the signup endpoint
+  | "email_verify_send"     // OTP dispatched for email verification
+  | "email_verify_send_rl"  // rate-limited on send / resend
+  | "email_verify_ok"       // verification succeeded
+  | "email_verify_fail"     // wrong or expired code
+  | "email_verify_rl";      // rate-limited on verify attempts
 
 // ─── IP / UA extraction ───────────────────────────────────────
 // x-forwarded-for may be a comma-separated list appended by each
@@ -192,6 +197,44 @@ export async function checkSignupRateLimit(ip: string): Promise<RateLimitVerdict
   if (ipCount >= SIGNUP_PER_IP_HOUR) {
     return { ok: false, retryInSeconds: 3600, reason: "ip_limit" };
   }
+  return { ok: true };
+}
+
+export async function checkEmailVerifyRateLimit(ip: string): Promise<RateLimitVerdict> {
+  const ipCount = await countEvents({
+    kind: "email_verify_fail", ip, windowSeconds: 900,
+  });
+  if (ipCount >= VERIFY_PER_IP_15M) {
+    return { ok: false, retryInSeconds: 900, reason: "ip_verify_limit" };
+  }
+  return { ok: true };
+}
+
+export async function checkEmailResendRateLimit(
+  email: string,
+  ip:    string,
+): Promise<RateLimitVerdict> {
+  const ipCount = await countEvents({
+    kind: "email_verify_send", ip, windowSeconds: 900,
+  });
+  if (ipCount >= REQUEST_PER_IP_15M) {
+    return { ok: false, retryInSeconds: 900, reason: "ip_limit" };
+  }
+
+  const emailHourly = await countEvents({
+    kind: "email_verify_send", email, windowSeconds: 3600,
+  });
+  if (emailHourly >= REQUEST_PER_EMAIL_HOUR) {
+    return { ok: false, retryInSeconds: 3600, reason: "email_hourly_limit" };
+  }
+
+  const emailCooldown = await countEvents({
+    kind: "email_verify_send", email, windowSeconds: REQUEST_COOLDOWN_SECONDS,
+  });
+  if (emailCooldown >= 1) {
+    return { ok: false, retryInSeconds: REQUEST_COOLDOWN_SECONDS, reason: "email_cooldown" };
+  }
+
   return { ok: true };
 }
 
