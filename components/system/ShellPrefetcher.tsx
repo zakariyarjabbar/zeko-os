@@ -30,7 +30,6 @@ import { useEffect }                   from "react";
 import { getChatCache }                from "@/lib/chat-cache";
 import { getAppCache }                 from "@/lib/app-cache";
 import { canViewInbox, canViewUsers, isFounder } from "@/lib/permissions";
-import { type Permission }             from "@/lib/types/permission";
 import type { Channel, DMConversation }        from "@/components/system/chat/types";
 import type { CachedInboxItem, CachedRole, CachedPermission, CachedUser } from "@/lib/app-cache";
 
@@ -97,12 +96,17 @@ async function prefetchUsers(): Promise<void> {
   } catch { /* silent */ }
 }
 
-async function refetchFlags(): Promise<Permission[] | null> {
+async function refetchFlags(): Promise<{ ids: string[]; names: string[] } | null> {
   try {
     const res = await fetch("/api/profile");
     if (!res.ok) return null;
-    const { accessFlags } = await res.json() as { accessFlags: Permission[] };
-    return Array.isArray(accessFlags) ? accessFlags : null;
+    const { accessFlags, accessFlagNames } = await res.json() as {
+      accessFlags:     string[];
+      accessFlagNames: string[];
+    };
+    return Array.isArray(accessFlags)
+      ? { ids: accessFlags, names: accessFlagNames ?? [] }
+      : null;
   } catch { return null; }
 }
 
@@ -123,7 +127,7 @@ async function prefetchPermissions(): Promise<void> {
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface ShellPrefetcherProps {
-  accessFlags: Permission[];
+  accessFlags: string[];
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -193,9 +197,9 @@ export function ShellPrefetcher({ accessFlags }: ShellPrefetcherProps) {
       // role permissions edited, or direct access_flags change).
       // Re-fetch flags → update SessionContext → re-fetch channels (access may differ).
       es.addEventListener("flags", () => {
-        refetchFlags().then((newFlags) => {
-          if (!newFlags) return;
-          window.dispatchEvent(new CustomEvent("zk:flags:updated", { detail: newFlags }));
+        refetchFlags().then((flagData) => {
+          if (!flagData) return;
+          window.dispatchEvent(new CustomEvent("zk:flags:updated", { detail: flagData }));
           // Channel permissions are derived from access flags — invalidate so
           // the chat sidebar reflects the new access immediately.
           getChatCache().invalidateChannels();

@@ -27,6 +27,8 @@ interface MessageLogProps {
   presence?:     Record<string, "ONLINE" | "OFFLINE">;
   /** Called when the user clicks "Send Direct Message" inside the popover */
   onOpenDm?:    (userId: string, username: string) => void;
+  /** True when viewing a DM — delete is restricted to sender-only regardless of canDelete */
+  isDm?:        boolean;
   /**
    * Changes whenever the active channel/DM switches.
    * Used to reset the "seen ids" tracker so animations don't carry over.
@@ -130,13 +132,15 @@ interface MessageGroupBlockProps {
   canDelete:    boolean;
   onDelete:     (id: string) => void;
   isOwnGroup:   boolean;
+  isDm:         boolean;
   onAvatarClick: (e: React.MouseEvent) => void;
   newIds:       Set<string>;
 }
 
 function MessageGroupBlock({
-  group, displayName, canDelete, onDelete, isOwnGroup, onAvatarClick, newIds,
+  group, displayName, canDelete, onDelete, isOwnGroup, isDm, onAvatarClick, newIds,
 }: MessageGroupBlockProps) {
+  const showDelete = isDm ? isOwnGroup : canDelete;
   const color = avatarColor(group.userId);  // userId is stable even after renames
 
   return (
@@ -194,7 +198,7 @@ function MessageGroupBlock({
               <span className="font-sans text-xs text-zk-muted/30 select-none">
                 {msg.timestamp}
               </span>
-              {canDelete && !msg.id.startsWith("opt-") && (
+              {showDelete && !msg.id.startsWith("opt-") && (
                 <button
                   onClick={() => onDelete(msg.id)}
                   aria-label="Delete message"
@@ -282,7 +286,7 @@ interface PopoverState {
 // ─── Component ────────────────────────────────────────────────
 export function MessageLog({
   messages, canDelete, onDelete, currentUserId, loading,
-  userProfiles = {}, presence = {}, onOpenDm, conversationKey,
+  userProfiles = {}, presence = {}, onOpenDm, isDm = false, conversationKey,
 }: MessageLogProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [popover, setPopover] = useState<PopoverState | null>(null);
@@ -396,6 +400,7 @@ export function MessageLog({
               canDelete={canDelete}
               onDelete={onDelete}
               isOwnGroup={group.userId === currentUserId}
+              isDm={isDm}
               onAvatarClick={(e) => handleAvatarClick(e, group)}
               newIds={newIds}
             />

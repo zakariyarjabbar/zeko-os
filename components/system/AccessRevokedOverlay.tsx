@@ -8,17 +8,16 @@
 import { useEffect, useState, useRef } from "react";
 import { useProfile }                   from "@/components/system/SessionContext";
 import { useSystemView, type SystemView } from "@/components/system/SystemViewContext";
-import { type Permission }              from "@/lib/types/permission";
 import { cn }                           from "@/lib/utils";
 import { ShieldOff, Lock, AlertTriangle } from "lucide-react";
 import { isFounder, canViewInbox, canViewUsers } from "@/lib/permissions";
 
 const COUNTDOWN_S = 5;
 
-function viewIsNowForbidden(view: SystemView, flags: readonly Permission[]): boolean {
-  if (view === "roles") return !isFounder(flags);
-  if (view === "users") return !canViewUsers(flags);
-  if (view === "inbox") return !canViewInbox(flags);
+function viewIsNowForbidden(view: SystemView, ids: readonly string[]): boolean {
+  if (view === "roles") return !isFounder(ids);
+  if (view === "users") return !canViewUsers(ids);
+  if (view === "inbox") return !canViewInbox(ids);
   return false;
 }
 
@@ -49,7 +48,7 @@ export function AccessRevokedOverlay() {
   const [timeLeft,    setTimeLeft]    = useState(COUNTDOWN_S);
   const [progress,    setProgress]    = useState(100);
 
-  const prevFlagsRef      = useRef<Permission[]>(profile.accessFlags);
+  const prevFlagsRef      = useRef<string[]>(profile.accessFlagNames);
   const intervalRef       = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef      = useRef<number>(0);
   const viewRef           = useRef(view);
@@ -60,19 +59,19 @@ export function AccessRevokedOverlay() {
 
   // Update prevFlagsRef AFTER the context re-renders with new flags.
   // This means onFlagsUpdated below always reads the flags from BEFORE the change.
-  useEffect(() => { prevFlagsRef.current = profile.accessFlags; }, [profile.accessFlags]);
+  useEffect(() => { prevFlagsRef.current = profile.accessFlagNames; }, [profile.accessFlagNames]);
 
   // ── Detect flag removals ────────────────────────────────────────────────────
   useEffect(() => {
     function onFlagsUpdated(e: Event) {
-      const newFlags = (e as CustomEvent<Permission[]>).detail;
-      const oldFlags = prevFlagsRef.current;
+      const { ids: newIds, names: newNames } = (e as CustomEvent<{ ids: string[]; names: string[] }>).detail;
+      const oldNames = prevFlagsRef.current;
 
-      const newSet  = new Set(newFlags as string[]);
-      const revoked = (oldFlags as string[]).filter((f) => !newSet.has(f));
+      const newNameSet = new Set(newNames);
+      const revoked    = oldNames.filter((n) => !newNameSet.has(n));
       if (revoked.length === 0) return; // only grants — nothing to show
 
-      const shouldRedirect = viewIsNowForbidden(viewRef.current, newFlags);
+      const shouldRedirect = viewIsNowForbidden(viewRef.current, newIds);
       shouldRedirectRef.current = shouldRedirect;
 
       setRevokeState({ revoked, shouldRedirect });

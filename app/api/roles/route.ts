@@ -4,12 +4,18 @@
 // Both require ROOT_ACCESS.
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireFounder } from "@/lib/require-founder";
+import { getSession } from "@/lib/auth";
+import { getEffectivePermissions } from "@/lib/effective-flags";
+import { canManageRoles, isFounder } from "@/lib/permissions";
+import { asUserId } from "@/lib/types/ids";
 import { supabaseAdmin } from "@/lib/supabase/server";
 
 export async function GET() {
-  const guard = await requireFounder();
-  if (!guard.ok) return guard.error as unknown as NextResponse;
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { ids } = await getEffectivePermissions(asUserId(session.id));
+  if (!isFounder(ids) && !canManageRoles(ids))
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { data: roles, error } = await supabaseAdmin
     .from("roles")
@@ -37,8 +43,11 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const guard = await requireFounder();
-  if (!guard.ok) return guard.error as unknown as NextResponse;
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { ids } = await getEffectivePermissions(asUserId(session.id));
+  if (!isFounder(ids) && !canManageRoles(ids))
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   let body: { name?: string; description?: string; permissions?: string[] };
   try { body = await req.json(); }

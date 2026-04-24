@@ -108,10 +108,9 @@ export default function ChatPage() {
   const activeDmRef   = useRef<string | undefined>(undefined);
   const isDmRef       = useRef<boolean>(false);
 
-  const isAdmin   = profile.accessFlags.includes("Administrator");
-  const canDelete = isDm
-    ? true
-    : isAdmin || profile.accessFlags.includes(channelPerm("delete-msg", activeChannel));
+  const isAdmin        = profile.accessFlags.includes("c3ea3541-3bd7-40e6-aefe-29dc1a455088");
+  const isChannelsMgr  = isAdmin || profile.accessFlags.includes("0dfd2b9c-644c-4dcd-8289-fcbeaa91d520");
+  const canDelete = isAdmin || profile.accessFlags.includes(channelPerm("delete-msg", activeChannel));
 
   // ── Channel list ───────────────────────────────────────────
   //
@@ -808,7 +807,7 @@ export default function ChatPage() {
         loadingChannels={loadingChannels}
         loadingDms={loadingDms}
         presence={presence}
-        isAdmin={isAdmin}
+        isAdmin={isChannelsMgr}
         onCreateChannel={handleCreateChannel}
         onEditChannel={handleEditChannel}
         onDeleteChannel={handleDeleteChannel}
@@ -891,6 +890,7 @@ export default function ChatPage() {
               userProfiles={userProfiles}
               presence={presence}
               onOpenDm={handleOpenDm}
+              isDm={isDm}
               conversationKey={convKey}
             />
             <CliInput

@@ -3,7 +3,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getEffectiveFlags } from "@/lib/effective-flags";
+import { getEffectivePermissions } from "@/lib/effective-flags";
 import { canManageInbox } from "@/lib/permissions";
 import { asUserId } from "@/lib/types/ids";
 
@@ -11,8 +11,8 @@ export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const flags = await getEffectiveFlags(asUserId(session.id));
-  if (!canManageInbox(flags)) {
+  const { ids } = await getEffectivePermissions(asUserId(session.id));
+  if (!canManageInbox(ids)) {
     return NextResponse.json({ error: "Forbidden. inbox-manager permission required." }, { status: 403 });
   }
 

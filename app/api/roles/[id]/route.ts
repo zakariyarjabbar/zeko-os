@@ -5,15 +5,21 @@
 // All require Administrator.
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireFounder } from "@/lib/require-founder";
+import { getSession } from "@/lib/auth";
+import { getEffectivePermissions } from "@/lib/effective-flags";
+import { canManageRoles, isFounder } from "@/lib/permissions";
+import { asUserId } from "@/lib/types/ids";
 import { supabaseAdmin } from "@/lib/supabase/server";
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireFounder();
-  if (!guard.ok) return guard.error as unknown as NextResponse;
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { ids } = await getEffectivePermissions(asUserId(session.id));
+  if (!isFounder(ids) && !canManageRoles(ids))
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await params;
 
@@ -44,14 +50,14 @@ export async function GET(
   }
 
   // ── Sanitise permissions ───────────────────────────────────
-  // Only keep permission names that exist in the permissions table.
+  // Only keep permission IDs that exist in the permissions table.
   const { data: validPerms } = await supabaseAdmin
     .from("permissions")
-    .select("name");
+    .select("id");
 
-  const validNames = new Set((validPerms ?? []).map((p: { name: string }) => p.name));
+  const validIds = new Set((validPerms ?? []).map((p: { id: string }) => p.id));
   const r = role as { id: string; name: string; description: string; permissions: string[]; created_at: string };
-  const cleanPermissions = (r.permissions ?? []).filter((p) => validNames.has(p));
+  const cleanPermissions = (r.permissions ?? []).filter((p) => validIds.has(p));
 
   return NextResponse.json({ ...r, permissions: cleanPermissions, users });
 }
@@ -60,8 +66,11 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireFounder();
-  if (!guard.ok) return guard.error as unknown as NextResponse;
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { ids } = await getEffectivePermissions(asUserId(session.id));
+  if (!isFounder(ids) && !canManageRoles(ids))
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await params;
 
@@ -92,8 +101,11 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireFounder();
-  if (!guard.ok) return guard.error as unknown as NextResponse;
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { ids } = await getEffectivePermissions(asUserId(session.id));
+  if (!isFounder(ids) && !canManageRoles(ids))
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await params;
 

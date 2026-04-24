@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProfile } from "@/components/system/SessionContext";
-import { canCreateUsers, canDeleteUsers, isFounder } from "@/lib/permissions";
+import { canCreateUsers, canDeleteUsers, canEditAnyUser, canChangeDisplayName, canManagePermissions, canManageRoles, isFounder } from "@/lib/permissions";
 import { getAppCache } from "@/lib/app-cache";
 import type { CachedUser as UserRow, CachedPermission as Permission, CachedRole as Role } from "@/lib/app-cache";
 
@@ -164,12 +164,15 @@ function FlagChip({ flag, active, onClick }: { flag: string; active: boolean; on
 // ─── Main page ────────────────────────────────────────────────
 export default function UsersPage() {
   const profile     = useProfile();
-  const actorFlags  = profile.accessFlags;
-  const isModerator = actorFlags.includes("moderator")
-    && !actorFlags.includes("admin")
-    && !isFounder(actorFlags);
-  const canCreate = canCreateUsers(actorFlags);
-  const canDelete = canDeleteUsers(actorFlags);
+  const actorFlags      = profile.accessFlags;
+  const isAdmin         = isFounder(actorFlags);
+  const canEdit         = canEditAnyUser(actorFlags);
+  const canEditName     = isAdmin || canChangeDisplayName(actorFlags);  // display name
+  const canEditAdmin    = isAdmin;                                       // username, email, password
+  const canEditRoles    = isAdmin || canManageRoles(actorFlags);
+  const canEditFlags    = isAdmin || canManagePermissions(actorFlags);
+  const canCreate       = canCreateUsers(actorFlags);
+  const canDelete       = canDeleteUsers(actorFlags);
 
   const cache = getAppCache();
 
@@ -672,7 +675,7 @@ export default function UsersPage() {
                   </div>
                   {/* Actions */}
                   <div className="flex items-center gap-2">
-                    {!isModerator && (
+                    {canEdit && (
                       <button
                         onClick={() => openEdit(selected)}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border font-sans text-sm border-zk-border/50 text-zk-slate hover:text-zk-white hover:border-zk-green/30 transition-all"
@@ -762,9 +765,10 @@ export default function UsersPage() {
                           <p className="font-sans text-xs text-zk-muted/25 italic">No flags assigned</p>
                         ) : (
                           <div className="flex flex-wrap gap-1.5">
-                            {(selected.profile?.access_flags ?? []).map((f) => (
-                              <FlagChip key={f} flag={f} active={true} />
-                            ))}
+                            {(selected.profile?.access_flags ?? []).map((f) => {
+                              const name = permissions.find((p) => p.id === f)?.name ?? f;
+                              return <FlagChip key={f} flag={name} active={true} />;
+                            })}
                           </div>
                         )}
                       </div>
@@ -785,7 +789,7 @@ export default function UsersPage() {
             )}
 
             {/* ── EDIT FORM ───────────────────────────────── */}
-            {rightMode === "edit" && selected && (
+            {rightMode === "edit" && selected && canEdit && (
               <motion.div
                 key={`edit-${selected.id}`}
                 initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }}
@@ -814,59 +818,67 @@ export default function UsersPage() {
                   <div>
                     <SectionLabel>identity</SectionLabel>
                     <div className="grid grid-cols-2 gap-4">
-                      <Field label="Display Name">
-                        <TextInput
-                          value={form.displayName}
-                          onChange={(v) => setForm((p) => ({ ...p, displayName: v }))}
-                          placeholder="Zakariya Jabbar"
-                        />
-                      </Field>
-                      <Field label="Username" required>
-                        <TextInput
-                          value={form.username}
-                          onChange={(v) => setForm((p) => ({ ...p, username: v }))}
-                          placeholder="zeko"
-                        />
-                      </Field>
-                      <Field label="Email">
-                        <TextInput value={form.email} onChange={() => {}} placeholder="—" disabled />
-                      </Field>
+                      {canEditName && (
+                        <Field label="Display Name">
+                          <TextInput
+                            value={form.displayName}
+                            onChange={(v) => setForm((p) => ({ ...p, displayName: v }))}
+                            placeholder="Zakariya Jabbar"
+                          />
+                        </Field>
+                      )}
+                      {canEditAdmin && (
+                        <Field label="Username" required>
+                          <TextInput
+                            value={form.username}
+                            onChange={(v) => setForm((p) => ({ ...p, username: v }))}
+                            placeholder="zeko"
+                          />
+                        </Field>
+                      )}
+                      {canEditAdmin && (
+                        <Field label="Email">
+                          <TextInput value={form.email} onChange={() => {}} placeholder="—" disabled />
+                        </Field>
+                      )}
                     </div>
                   </div>
 
                   {/* Credentials */}
-                  <div>
-                    <SectionLabel>credentials</SectionLabel>
-                    <div className="max-w-sm">
-                      <Field label="New Password (leave blank to keep current)">
-                        <div className="relative">
-                          <Lock size={10} className="absolute left-3 top-1/2 -translate-y-1/2 text-zk-muted/30 pointer-events-none" />
-                          <input
-                            type={showPass ? "text" : "password"}
-                            value={form.password}
-                            onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
-                            placeholder="min. 8 characters"
-                            autoComplete="new-password"
-                            className={cn(
-                              "w-full pl-8 pr-8 py-2 rounded border bg-zk-surface/60 border-zk-border",
-                              "font-sans text-sm text-zk-white placeholder:text-zk-muted/30",
-                              "outline-none focus:border-zk-green/50 transition-colors",
-                            )}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowPass((v) => !v)}
-                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zk-muted/35 hover:text-zk-green transition-colors"
-                          >
-                            {showPass ? <EyeOff size={11} /> : <Eye size={11} />}
-                          </button>
-                        </div>
-                      </Field>
+                  {canEditAdmin && (
+                    <div>
+                      <SectionLabel>credentials</SectionLabel>
+                      <div className="max-w-sm">
+                        <Field label="New Password (leave blank to keep current)">
+                          <div className="relative">
+                            <Lock size={10} className="absolute left-3 top-1/2 -translate-y-1/2 text-zk-muted/30 pointer-events-none" />
+                            <input
+                              type={showPass ? "text" : "password"}
+                              value={form.password}
+                              onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
+                              placeholder="min. 8 characters"
+                              autoComplete="new-password"
+                              className={cn(
+                                "w-full pl-8 pr-8 py-2 rounded border bg-zk-surface/60 border-zk-border",
+                                "font-sans text-sm text-zk-white placeholder:text-zk-muted/30",
+                                "outline-none focus:border-zk-green/50 transition-colors",
+                              )}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPass((v) => !v)}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zk-muted/35 hover:text-zk-green transition-colors"
+                            >
+                              {showPass ? <EyeOff size={11} /> : <Eye size={11} />}
+                            </button>
+                          </div>
+                        </Field>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Roles */}
-                  {!isModerator && (
+                  {canEditRoles && (
                     <div>
                       <SectionLabel>roles</SectionLabel>
                       {roles.length === 0 ? (
@@ -886,7 +898,7 @@ export default function UsersPage() {
                   )}
 
                   {/* Access flags */}
-                  {!isModerator && (
+                  {canEditFlags && (
                     <div>
                       <SectionLabel>access flags</SectionLabel>
                       {permissions.length === 0 ? (
@@ -896,8 +908,8 @@ export default function UsersPage() {
                           {permissions.map((perm) => (
                             <FlagChip
                               key={perm.id} flag={perm.name}
-                              active={form.accessFlags.includes(perm.name)}
-                              onClick={() => toggleFlag(perm.name)}
+                              active={form.accessFlags.includes(perm.id)}
+                              onClick={() => toggleFlag(perm.id)}
                             />
                           ))}
                         </div>
@@ -1017,7 +1029,7 @@ export default function UsersPage() {
                     </div>
                   </div>
 
-                  {!isModerator && (
+                  {canEdit && (
                     <div>
                       <SectionLabel>roles</SectionLabel>
                       {roles.length === 0 ? (
@@ -1036,7 +1048,7 @@ export default function UsersPage() {
                     </div>
                   )}
 
-                  {!isModerator && (
+                  {canEdit && (
                     <div>
                       <SectionLabel>access flags</SectionLabel>
                       {permissions.length === 0 ? (
@@ -1046,8 +1058,8 @@ export default function UsersPage() {
                           {permissions.map((perm) => (
                             <FlagChip
                               key={perm.id} flag={perm.name}
-                              active={form.accessFlags.includes(perm.name)}
-                              onClick={() => toggleFlag(perm.name)}
+                              active={form.accessFlags.includes(perm.id)}
+                              onClick={() => toggleFlag(perm.id)}
                             />
                           ))}
                         </div>

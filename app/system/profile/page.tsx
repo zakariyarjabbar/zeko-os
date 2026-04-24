@@ -379,13 +379,13 @@ function AccountInfo() {
           ))}
         </div>
 
-        {profile.accessFlags.length > 0 && (
+        {profile.accessFlagNames.length > 0 && (
           <div className="pt-3 border-t border-zk-border/40 space-y-2">
             <p className="font-sans text-[10px] text-zk-muted/40 uppercase tracking-wide">
               Access Flags
             </p>
             <div className="flex flex-wrap gap-1.5">
-              {profile.accessFlags.map((flag) => (
+              {profile.accessFlagNames.map((flag) => (
                 <span
                   key={flag}
                   className="font-sans text-xs text-zk-green border border-zk-green/20 bg-zk-green/[0.05] rounded px-2 py-0.5"

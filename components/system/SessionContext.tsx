@@ -11,7 +11,6 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { type SessionPayload } from "@/lib/auth";
 import { type UserProfile } from "@/lib/profile";
-import { type Permission } from "@/lib/types/permission";
 
 interface SystemContext {
   session: SessionPayload;
@@ -33,9 +32,13 @@ export function SessionProvider({
 
   useEffect(() => {
     function onFlagsUpdated(e: Event) {
-      const flags = (e as CustomEvent<Permission[]>).detail;
-      if (Array.isArray(flags)) {
-        setProfile((p) => ({ ...p, accessFlags: flags }));
+      const data = (e as CustomEvent<{ ids: string[]; names: string[] }>).detail;
+      if (data && Array.isArray(data.ids)) {
+        setProfile((p) => ({
+          ...p,
+          accessFlags:     data.ids,
+          accessFlagNames: data.names ?? [],
+        }));
       }
     }
     window.addEventListener("zk:flags:updated", onFlagsUpdated);

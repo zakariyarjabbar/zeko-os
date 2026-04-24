@@ -26,7 +26,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest }       from "next/server";
 import { getSession }        from "@/lib/auth";
-import { getEffectiveFlags } from "@/lib/effective-flags";
+import { getEffectivePermissions } from "@/lib/effective-flags";
 import { asUserId }          from "@/lib/types/ids";
 import { supabaseAdmin }     from "@/lib/supabase/server";
 import { canViewInbox }      from "@/lib/permissions";
@@ -69,11 +69,10 @@ export async function GET(req: NextRequest) {
   const sessionId = session.id; // extract before async closures (strict null safety)
 
   // ── Permission snapshot (taken once at connection time) ────
-  const flags      = await getEffectiveFlags(asUserId(sessionId));
-  const watchInbox = canViewInbox(flags);
-  // Snapshot of effective flags — compared each poll to detect permission changes.
-  // Covers role assignment, role permission edits, and direct access_flags changes.
-  let flagsSnapshot = [...flags].sort().join(",");
+  const { ids: initIds } = await getEffectivePermissions(asUserId(sessionId));
+  const watchInbox       = canViewInbox(initIds);
+  // Snapshot hashed from UUIDs — detects any permission change on each poll.
+  let flagsSnapshot = [...initIds].sort().join(",");
 
   // ── Presence watch list ────────────────────────────────────
   // Parse ?watch=uuid1,uuid2,...  Validate every entry as a UUID
@@ -175,8 +174,8 @@ export async function GET(req: NextRequest) {
           // signals the client only when the set actually changes, covering
           // role assignment, role permission edits, and direct flag changes.
           if (!closed) {
-            const updatedFlags = await getEffectiveFlags(asUserId(sessionId));
-            const updatedHash  = [...updatedFlags].sort().join(",");
+            const { ids: updatedIds } = await getEffectivePermissions(asUserId(sessionId));
+            const updatedHash         = [...updatedIds].sort().join(",");
             if (updatedHash !== flagsSnapshot) {
               flagsSnapshot = updatedHash;
               controller.enqueue(signal("flags"));

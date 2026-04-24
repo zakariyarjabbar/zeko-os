@@ -4,16 +4,23 @@
 // Both require Administrator.
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireFounder } from "@/lib/require-founder";
+import { getSession } from "@/lib/auth";
+import { getEffectivePermissions } from "@/lib/effective-flags";
+import { canManagePermissions, isFounder } from "@/lib/permissions";
+
+const ADMIN_PERMISSION = "Administrator";
+import { asUserId } from "@/lib/types/ids";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { ADMIN_PERMISSION } from "@/lib/permissions";
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireFounder();
-  if (!guard.ok) return guard.error as unknown as NextResponse;
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { ids } = await getEffectivePermissions(asUserId(session.id));
+  if (!isFounder(ids) && !canManagePermissions(ids))
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await params;
   let body: { name?: string; description?: string };
@@ -42,8 +49,11 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireFounder();
-  if (!guard.ok) return guard.error as unknown as NextResponse;
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { ids } = await getEffectivePermissions(asUserId(session.id));
+  if (!isFounder(ids) && !canManagePermissions(ids))
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await params;
 

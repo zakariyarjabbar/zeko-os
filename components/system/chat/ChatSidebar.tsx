@@ -152,10 +152,10 @@ function PermPicker({
       )
     : options;
 
-  const selected = options.find((p) => p.name === value);
+  const selected = options.find((p) => p.id === value);
 
-  function pick(name: string) {
-    onChange(name);
+  function pick(id: string) {
+    onChange(id);
     setOpen(false);
     setFilter("");
   }
@@ -218,7 +218,7 @@ function PermPicker({
           <div className="max-h-40 overflow-y-auto scrollbar-thin">
             {/* Clear option */}
             <button
-              onClick={() => pick("")}
+              onClick={() => { onChange(""); setOpen(false); setFilter(""); }}
               className={cn(
                 "w-full flex items-center gap-2 px-2.5 py-2 text-left transition-colors",
                 "border-b border-zk-border/20 hover:bg-zk-green/5",
@@ -237,15 +237,15 @@ function PermPicker({
             {filtered.map((p) => (
               <button
                 key={p.id}
-                onClick={() => pick(p.name)}
+                onClick={() => pick(p.id)}
                 className={cn(
                   "w-full flex items-start gap-2 px-2.5 py-2 text-left transition-colors",
                   "border-b border-zk-border/10 last:border-0",
-                  value === p.name ? "bg-zk-green/8" : "hover:bg-zk-green/5",
+                  value === p.id ? "bg-zk-green/8" : "hover:bg-zk-green/5",
                 )}
               >
                 <span className="w-3 mt-0.5 shrink-0 flex items-center justify-center">
-                  {value === p.name && <Check size={9} className="text-zk-green" />}
+                  {value === p.id && <Check size={9} className="text-zk-green" />}
                 </span>
                 <div className="flex flex-col min-w-0">
                   <span className={cn(

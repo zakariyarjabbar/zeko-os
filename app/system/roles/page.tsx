@@ -13,6 +13,8 @@ import {
   Users, Key, Terminal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useProfile } from "@/components/system/SessionContext";
+import { canManageRoles, canManagePermissions, isFounder } from "@/lib/permissions";
 import { getAppCache } from "@/lib/app-cache";
 import type { CachedRole, CachedPermission } from "@/lib/app-cache";
 
@@ -92,7 +94,7 @@ function blankRole() {
   return { name: "", description: "", permissions: [] as string[] };
 }
 
-function RolesTab({ permissions }: { permissions: Permission[] }) {
+function RolesTab({ permissions, canWrite }: { permissions: Permission[]; canWrite: boolean }) {
   // Start empty — sessionStorage reads happen in useEffect (client-only)
   const [roles,    setRoles]    = useState<Role[]>([]);
   const [detail,   setDetail]   = useState<RoleDetail | null>(null);
@@ -220,12 +222,14 @@ function RolesTab({ permissions }: { permissions: Permission[] }) {
             <button onClick={() => fetchRoles(true)} className="p-1 text-zk-muted/35 hover:text-zk-green transition-colors">
               <RefreshCw size={11} className={loading ? "animate-spin" : ""} />
             </button>
-            <button
-              onClick={openCreate}
-              className="flex items-center gap-1 px-2 py-1 rounded-sm border font-sans text-xs text-zk-green border-zk-green/25 bg-zk-green/5 hover:bg-zk-green/12 hover:border-zk-green/50 transition-all"
-            >
-              <Plus size={9} /> New
-            </button>
+            {canWrite && (
+              <button
+                onClick={openCreate}
+                className="flex items-center gap-1 px-2 py-1 rounded-sm border font-sans text-xs text-zk-green border-zk-green/25 bg-zk-green/5 hover:bg-zk-green/12 hover:border-zk-green/50 transition-all"
+              >
+                <Plus size={9} /> New
+              </button>
+            )}
           </div>
         </div>
 
@@ -328,7 +332,7 @@ function RolesTab({ permissions }: { permissions: Permission[] }) {
                   }
                 </div>
                 <div className="flex items-center gap-2">
-                  {!isEditing && detail && (
+                  {!isEditing && detail && canWrite && (
                     <>
                       <button
                         onClick={() => { setMode("edit"); setToast(null); }}
@@ -423,13 +427,13 @@ function RolesTab({ permissions }: { permissions: Permission[] }) {
                     <div className="grid grid-cols-1 gap-1.5">
                       {permissions.map((perm) => {
                         const active = isEditing
-                          ? form.permissions.includes(perm.name)
-                          : (detail?.permissions ?? []).includes(perm.name);
+                          ? form.permissions.includes(perm.id)
+                          : (detail?.permissions ?? []).includes(perm.id);
 
                         return (
                           <div
                             key={perm.id}
-                            onClick={() => isEditing && togglePerm(perm.name)}
+                            onClick={() => isEditing && togglePerm(perm.id)}
                             className={cn(
                               "flex items-center gap-3 px-4 py-2.5 rounded-sm border",
                               "transition-all duration-150",
@@ -563,7 +567,7 @@ function blankPerm() {
   return { name: "", description: "" };
 }
 
-function PermissionsTab() {
+function PermissionsTab({ canWrite }: { canWrite: boolean }) {
   const cachedPermissions = getAppCache().getPermissions() as Permission[] | null;
 
   const [perms,    setPerms]    = useState<Permission[]>(cachedPermissions ?? []);
@@ -688,12 +692,14 @@ function PermissionsTab() {
             <button onClick={() => fetchPerms()} className="p-1 text-zk-muted/35 hover:text-zk-green transition-colors">
               <RefreshCw size={11} className={loading ? "animate-spin" : ""} />
             </button>
-            <button
-              onClick={openCreate}
-              className="flex items-center gap-1 px-2 py-1 rounded-sm border font-sans text-xs text-zk-green border-zk-green/25 bg-zk-green/5 hover:bg-zk-green/12 hover:border-zk-green/50 transition-all"
-            >
-              <Plus size={9} /> New
-            </button>
+            {canWrite && (
+              <button
+                onClick={openCreate}
+                className="flex items-center gap-1 px-2 py-1 rounded-sm border font-sans text-xs text-zk-green border-zk-green/25 bg-zk-green/5 hover:bg-zk-green/12 hover:border-zk-green/50 transition-all"
+              >
+                <Plus size={9} /> New
+              </button>
+            )}
           </div>
         </div>
 
@@ -790,7 +796,7 @@ function PermissionsTab() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {mode === "view" && selected && (
+                  {mode === "view" && selected && canWrite && (
                     <>
                       <button
                         onClick={() => openEdit(selected)}
@@ -933,12 +939,14 @@ function PermissionsTab() {
                 <p className="font-sans text-sm text-zk-muted/30">Select a permission or create new</p>
                 <p className="font-sans text-xs text-zk-muted/20">granular access keys assigned to roles</p>
               </div>
-              <button
-                onClick={openCreate}
-                className="flex items-center gap-2 px-4 py-2 rounded border font-sans text-sm font-medium border-zk-green/25 bg-zk-green/5 text-zk-green/60 hover:text-zk-green hover:bg-zk-green/12 hover:border-zk-green/40 transition-all"
-              >
-                <Plus size={12} /> New Permission
-              </button>
+              {canWrite && (
+                <button
+                  onClick={openCreate}
+                  className="flex items-center gap-2 px-4 py-2 rounded border font-sans text-sm font-medium border-zk-green/25 bg-zk-green/5 text-zk-green/60 hover:text-zk-green hover:bg-zk-green/12 hover:border-zk-green/40 transition-all"
+                >
+                  <Plus size={12} /> New Permission
+                </button>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -949,7 +957,14 @@ function PermissionsTab() {
 
 // ─── Root page: IAM Control Panel ─────────────────────────────
 export default function IAMPage() {
-  const [activeTab,   setActiveTab]   = useState<ActiveTab>("roles");
+  const profile        = useProfile();
+  const actorIds       = profile.accessFlags;
+  const isAdmin        = isFounder(actorIds);
+  const canRoles       = isAdmin || canManageRoles(actorIds);
+  const canPerms       = isAdmin || canManagePermissions(actorIds);
+
+  const defaultTab: ActiveTab = canRoles ? "roles" : "permissions";
+  const [activeTab,   setActiveTab]   = useState<ActiveTab>(defaultTab);
   // Start empty so SSR and client initial render match
   const [perms,       setPerms]       = useState<Permission[]>([]);
   const [permsLoaded, setPermsLoaded] = useState(false);
@@ -970,8 +985,8 @@ export default function IAMPage() {
   }, []);
 
   const tabs: { id: ActiveTab; label: string; icon: React.ElementType }[] = [
-    { id: "roles",       label: "Roles",       icon: ShieldCheck },
-    { id: "permissions", label: "Permissions", icon: Key         },
+    ...(canRoles ? [{ id: "roles" as ActiveTab,       label: "Roles",       icon: ShieldCheck }] : []),
+    ...(canPerms ? [{ id: "permissions" as ActiveTab, label: "Permissions", icon: Key         }] : []),
   ];
 
   return (
@@ -1017,8 +1032,8 @@ export default function IAMPage() {
           className="flex flex-1 overflow-hidden"
         >
           {activeTab === "roles"
-            ? <RolesTab permissions={perms} />
-            : <PermissionsTab />}
+            ? <RolesTab permissions={perms} canWrite={canRoles} />
+            : <PermissionsTab canWrite={canPerms} />}
         </motion.div>
       </AnimatePresence>
     </div>

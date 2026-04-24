@@ -1,86 +1,101 @@
 // lib/permissions.ts
-// Permission guard helpers.
-// Permissions are dynamic DB records — no hardcoded list except the names below.
-// All functions accept readonly arrays to enforce that they never mutate the flags.
+// Permission guard helpers — UUID-based (rename-safe).
+// All functions accept the raw permission UUID array (ids) from
+// getEffectivePermissions(), never name strings.
 
-import { type Permission, type SystemFlag, type ChannelAction, channelPerm } from "./types/permission";
+import { PERM } from "./permission-ids";
 
-export const ADMIN_PERMISSION: SystemFlag = "Administrator";
+// ── Core ──────────────────────────────────────────────────────
 
-// ─── Core guards ──────────────────────────────────────────────
+export function isFounder(ids: readonly string[]): boolean {
+  return ids.includes(PERM.Administrator);
+}
 
-/** True if `flags` contains the unrestricted Administrator flag. */
-export function isFounder(flags: readonly Permission[]): boolean {
-  return flags.includes(ADMIN_PERMISSION);
+export function hasPermission(ids: readonly string[], permId: string): boolean {
+  return ids.includes(PERM.Administrator) || ids.includes(permId);
+}
+
+// ── Chat — channels ───────────────────────────────────────────
+
+/** Overrides all per-channel restrictions — can view + delete in every channel. */
+export function isChannelsManager(ids: readonly string[]): boolean {
+  return ids.includes(PERM.Administrator) || ids.includes(PERM.ChannelsManager);
 }
 
 /**
- * True if `flags` contains `flag` OR the Administrator override.
- * Use the typed overloads below for named checks — this is the escape hatch
- * for dynamically composed permissions (e.g. channel-scoped at runtime).
+ * Can delete a specific message in a channel.
+ * `flags` is the name-resolved list — needed for the dynamic per-channel
+ * `delete-msg:<channelId>` check (channel IDs are stable so name-based is safe here).
  */
-export function hasPermission(flags: readonly Permission[], flag: Permission): boolean {
-  return flags.includes(ADMIN_PERMISSION) || flags.includes(flag);
-}
-
-/**
- * True if `flags` grants the given channel action on `channelId`.
- * Equivalent to `hasPermission(flags, channelPerm(action, channelId))`.
- *
- * @example  hasChannelPermission(flags, "view", "global-ops")
- */
-export function hasChannelPermission(
-  flags:     readonly Permission[],
-  action:    ChannelAction,
+export function canDeleteChannelMessage(
+  ids:       readonly string[],
+  flags:     readonly string[],
   channelId: string,
+  isOwn:     boolean,
 ): boolean {
-  return hasPermission(flags, channelPerm(action, channelId));
+  return isOwn
+    || ids.includes(PERM.Administrator)
+    || ids.includes(PERM.ChannelsManager)
+    || flags.includes(`delete-msg:${channelId}`);
 }
 
-// ─── Named permission checks ──────────────────────────────────
+// ── Inbox ─────────────────────────────────────────────────────
 
-export function canViewInbox(flags: readonly Permission[]): boolean {
-  return flags.includes(ADMIN_PERMISSION)
-    || flags.includes("inbox-manager")
-    || flags.includes("view-inbox");
+export function canViewInbox(ids: readonly string[]): boolean {
+  return ids.includes(PERM.Administrator)
+    || ids.includes(PERM.InboxView)
+    || ids.includes(PERM.InboxManager);
 }
 
-export function canManageInbox(flags: readonly Permission[]): boolean {
-  return flags.includes(ADMIN_PERMISSION) || flags.includes("inbox-manager");
+export function canManageInbox(ids: readonly string[]): boolean {
+  return ids.includes(PERM.Administrator) || ids.includes(PERM.InboxManager);
 }
 
-/** Can list users — moderator, admin, Administrator. */
-export function canViewUsers(flags: readonly Permission[]): boolean {
-  return flags.includes(ADMIN_PERMISSION)
-    || flags.includes("admin")
-    || flags.includes("moderator");
+// ── Users ─────────────────────────────────────────────────────
+
+/** Can see the permissions/access_flags column in user records. */
+export function canViewUserPermissions(ids: readonly string[]): boolean {
+  return ids.includes(PERM.Administrator) || ids.includes(PERM.PermissionManager);
 }
 
-/** Can create users — admin and Administrator only (not moderator). */
-export function canCreateUsers(flags: readonly Permission[]): boolean {
-  return flags.includes(ADMIN_PERMISSION) || flags.includes("admin");
+/** Can open the edit panel for any user (has at least one management permission). */
+export function canEditAnyUser(ids: readonly string[]): boolean {
+  return ids.includes(PERM.Administrator)
+    || ids.includes(PERM.ChangeDisplayName)
+    || ids.includes(PERM.PermissionManager)
+    || ids.includes(PERM.RolesManager);
 }
 
-/**
- * Can edit a user's profile.
- * - moderator:      limited fields only (see MODERATOR_EDITABLE_FIELDS)
- * - admin/Admin:    all fields, but blocked on Administrator-flagged targets
- */
-export function canEditUsers(flags: readonly Permission[]): boolean {
-  return flags.includes(ADMIN_PERMISSION)
-    || flags.includes("admin")
-    || flags.includes("moderator");
+/** Can change a user's display name, username, or password. */
+export function canChangeDisplayName(ids: readonly string[]): boolean {
+  return ids.includes(PERM.Administrator) || ids.includes(PERM.ChangeDisplayName);
 }
 
-/** Can delete a user — admin and Administrator only (not moderator). */
-export function canDeleteUsers(flags: readonly Permission[]): boolean {
-  return flags.includes(ADMIN_PERMISSION) || flags.includes("admin");
+/** Can change a user's access_flags and manage permission definitions. */
+export function canManagePermissions(ids: readonly string[]): boolean {
+  return ids.includes(PERM.Administrator) || ids.includes(PERM.PermissionManager);
 }
 
-// ─── Constants ────────────────────────────────────────────────
+/** Can assign/remove roles and manage role definitions. */
+export function canManageRoles(ids: readonly string[]): boolean {
+  return ids.includes(PERM.Administrator) || ids.includes(PERM.RolesManager);
+}
 
-/** Fields a moderator is permitted to update on another user's profile. */
-export const MODERATOR_EDITABLE_FIELDS = new Set<string>([
-  "username",
-  "password",
-]);
+/** Can create new user accounts. */
+export function canCreateUsers(ids: readonly string[]): boolean {
+  return ids.includes(PERM.Administrator) || ids.includes(PERM.PermissionManager);
+}
+
+/** Can delete user accounts — Administrator only. */
+export function canDeleteUsers(ids: readonly string[]): boolean {
+  return ids.includes(PERM.Administrator);
+}
+
+// ── Legacy aliases ────────────────────────────────────────────
+
+/** @deprecated use canEditAnyUser */
+export function canViewUsers(ids: readonly string[]): boolean {
+  return canEditAnyUser(ids);
+}
+
+export const MODERATOR_EDITABLE_FIELDS = new Set<string>(["username", "password"]);

@@ -12,7 +12,7 @@
 import { useState, useEffect }  from "react";
 import { useSystemView }         from "@/components/system/SystemViewContext";
 import { useProfile }            from "@/components/system/SessionContext";
-import { canViewInbox, canViewUsers, isFounder } from "@/lib/permissions";
+import { canViewInbox, isFounder, canManageRoles, canManagePermissions } from "@/lib/permissions";
 
 // Loading skeletons — safe to render on server (no dynamic data)
 import UsersLoading    from "@/app/system/users/loading";
@@ -57,8 +57,7 @@ export function SystemContent() {
 
   // Client-side permission guard — mirrors the server-side layout guards
   const effectiveView =
-    (view === "users" && !canViewUsers(flags)) ? "overview" :
-    (view === "roles" && !isFounder(flags))    ? "overview" :
+    (view === "roles" && !isFounder(flags) && !canManageRoles(flags) && !canManagePermissions(flags)) ? "overview" :
     (view === "inbox" && !canViewInbox(flags)) ? "overview" :
     view;
 

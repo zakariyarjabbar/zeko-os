@@ -1,24 +1,22 @@
 // app/api/users/route.ts
-// GET  /api/users — list users  (moderator | admin | Administrator)
-// POST /api/users — create user (admin | Administrator)
+// GET  /api/users — list users  (any authenticated user; access_flags hidden for non-permission-managers)
+// POST /api/users — create user (permission-manager | Administrator)
 //
 // display_id is assigned automatically by the DB sequence — never passed from the client.
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getEffectiveFlags } from "@/lib/effective-flags";
+import { getEffectivePermissions } from "@/lib/effective-flags";
 import { asUserId } from "@/lib/types/ids";
-import { canViewUsers, canCreateUsers } from "@/lib/permissions";
+import { canCreateUsers, canViewUserPermissions } from "@/lib/permissions";
 import { supabaseAdmin } from "@/lib/supabase/server";
 
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const flags = await getEffectiveFlags(asUserId(session.id));
-  if (!canViewUsers(flags)) {
-    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
-  }
+  const { ids }     = await getEffectivePermissions(asUserId(session.id));
+  const canViewPerms = canViewUserPermissions(ids);
 
   const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers();
   if (authError) return NextResponse.json({ error: authError.message }, { status: 500 });
@@ -44,15 +42,20 @@ export async function GET() {
 
   const users = authData.users.map((u) => {
     const p = profileMap.get(u.id);
+    const profile = p
+      ? {
+          ...p,
+          last_active:  p.last_active ?? u.last_sign_in_at ?? null,
+          access_flags: canViewPerms ? p.access_flags : undefined,
+        }
+      : null;
     return {
       id:             u.id,
       email:          u.email,
       emailConfirmed: !!u.email_confirmed_at,
       createdAt:      u.created_at,
       lastSignIn:     u.last_sign_in_at ?? null,
-      profile:        p
-        ? { ...p, last_active: p.last_active ?? u.last_sign_in_at ?? null }
-        : null,
+      profile,
       roles:          roleMap.get(u.id) ?? [],
     };
   });
@@ -64,9 +67,9 @@ export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const flags = await getEffectiveFlags(asUserId(session.id));
-  if (!canCreateUsers(flags)) {
-    return NextResponse.json({ error: "Forbidden. admin or Administrator permission required." }, { status: 403 });
+  const { ids } = await getEffectivePermissions(asUserId(session.id));
+  if (!canCreateUsers(ids)) {
+    return NextResponse.json({ error: "Forbidden. permission-manager or Administrator required." }, { status: 403 });
   }
 
   let body: {
@@ -94,7 +97,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
   }
 
-  // display_name: letters, numbers, spaces — max one space
   const cleanDisplayName = (displayName ?? "").trim();
   if (cleanDisplayName && (cleanDisplayName.match(/ /g) ?? []).length > 1) {
     return NextResponse.json({ error: "Display name may contain at most one space." }, { status: 400 });
@@ -111,7 +113,6 @@ export async function POST(req: NextRequest) {
 
   const userId = authData.user.id;
 
-  // display_id is intentionally omitted — the DB sequence assigns it automatically
   const { error: profileError } = await supabaseAdmin
     .from("profiles")
     .insert({

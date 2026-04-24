@@ -27,7 +27,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { getEffectiveFlags } from "@/lib/effective-flags";
+import { getEffectivePermissions } from "@/lib/effective-flags";
+import { isFounder }               from "@/lib/permissions";
 import { setSession } from "@/lib/auth";
 import { asUserId } from "@/lib/types/ids";
 import {
@@ -155,8 +156,8 @@ export async function POST(req: NextRequest) {
 
   let role = meta.role ?? "user";
   if (!meta.role) {
-    const flags = await getEffectiveFlags(asUserId(user.id));
-    if (flags.includes("Administrator")) role = "admin";
+    const { ids } = await getEffectivePermissions(asUserId(user.id));
+    if (isFounder(ids)) role = "admin";
   }
 
   const { data: profileRow } = await supabaseAdmin

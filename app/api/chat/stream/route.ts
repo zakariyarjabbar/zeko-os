@@ -34,7 +34,8 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest }        from "next/server";
 import { getSession }         from "@/lib/auth";
-import { getEffectiveFlags }  from "@/lib/effective-flags";
+import { getEffectivePermissions } from "@/lib/effective-flags";
+import { isFounder }          from "@/lib/permissions";
 import { asUserId }           from "@/lib/types/ids";
 import { channelPerm }        from "@/lib/types/permission";
 import { supabaseAdmin }      from "@/lib/supabase/server";
@@ -73,11 +74,18 @@ export async function GET(req: NextRequest) {
 
   // ── Permission check (done once, before stream opens) ─────
   if (params.type === "channel") {
-    const flags   = await getEffectiveFlags(asUserId(sessionId));
-    const isAdmin = flags.includes("Administrator");
-    if (!isAdmin && !flags.includes(channelPerm("view", params.id))) {
-      return new Response("Forbidden", { status: 403 });
-    }
+    const [{ ids, flags }, channelRes] = await Promise.all([
+      getEffectivePermissions(asUserId(sessionId)),
+      supabaseAdmin.from("channels").select("public, view_permission").eq("id", params.id).single(),
+    ]);
+    const ch = channelRes.data as { public: boolean; view_permission: string | null } | null;
+    const isPublic   = ch?.public === true;
+    const viewPermId = ch?.view_permission ?? null;
+    const canView =
+      isFounder(ids) ||
+      isPublic ||
+      (viewPermId ? ids.includes(viewPermId) : flags.includes(channelPerm("view", params.id)));
+    if (!canView) return new Response("Forbidden", { status: 403 });
   }
   // DM: participant identity is enforced in the Realtime callback filter
   // and in the fallback SQL .or() query below

@@ -10,6 +10,8 @@ import { supabaseAdmin }           from "@/lib/supabase/server";
 import { getEffectivePermissions } from "@/lib/effective-flags";
 import { asUserId }                from "@/lib/types/ids";
 import { channelPerm }             from "@/lib/types/permission";
+import { isChannelsManager, isFounder } from "@/lib/permissions";
+import { PERM }                    from "@/lib/permission-ids";
 
 const ONLINE_THRESHOLD_MS = 60 * 1000;
 
@@ -30,15 +32,8 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { flags: userFlags, ids: userPermIds } = await getEffectivePermissions(asUserId(session.id));
-  const isAdmin = userFlags.includes("Administrator");
-
-  // Fetch the Administrator permission UUID once — used for online count
-  const { data: adminPermRow } = await supabaseAdmin
-    .from("permissions")
-    .select("id")
-    .eq("name", "Administrator")
-    .single();
-  const adminPermId: string | null = (adminPermRow as { id: string } | null)?.id ?? null;
+  const isAdmin       = isFounder(userPermIds);
+  const isChannelsMgr = isChannelsManager(userPermIds);
 
   const [channelsRes, permsRes, onlineRes] = await Promise.all([
     supabaseAdmin
@@ -80,7 +75,7 @@ export async function GET() {
     // New channels: compare by UUID (rename-safe)
     // Legacy channels (channel_permissions table): compare by name string
     let canUserView: boolean;
-    if (isAdmin || isPublic) {
+    if (isChannelsMgr || isPublic) {
       canUserView = true;
     } else if (viewPermId) {
       canUserView = userPermIds.includes(viewPermId);           // UUID check
@@ -98,7 +93,7 @@ export async function GET() {
     // ── Online count ─────────────────────────────────────────
     // access_flags on profiles are now UUIDs, so compare by UUID
     const onlineCount = onlineProfiles.filter((p) => {
-      if (adminPermId && p.access_flags.includes(adminPermId)) return true;
+      if (p.access_flags.includes(PERM.Administrator)) return true;
       if (isPublic) return true;
       if (viewPermId) return p.access_flags.includes(viewPermId);
       // Legacy: name-based (channel_permissions table)
@@ -124,8 +119,8 @@ export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { flags } = await getEffectivePermissions(asUserId(session.id));
-  if (!flags.includes("Administrator"))
+  const { ids } = await getEffectivePermissions(asUserId(session.id));
+  if (!isFounder(ids) && !isChannelsManager(ids))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body             = await req.json().catch(() => null);
@@ -164,8 +159,8 @@ export async function PATCH(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { flags } = await getEffectivePermissions(asUserId(session.id));
-  if (!flags.includes("Administrator"))
+  const { ids } = await getEffectivePermissions(asUserId(session.id));
+  if (!isFounder(ids) && !isChannelsManager(ids))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body             = await req.json().catch(() => null);
@@ -200,7 +195,7 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
   const { flags, ids: userPermIds } = await getEffectivePermissions(asUserId(session.id));
-  const isAdmin   = flags.includes("Administrator");
+  const isAdmin   = isFounder(userPermIds);
 
   // manage permission check — still name-based (channelPerm returns a name string)
   const canManage = isAdmin || flags.includes(channelPerm("manage", id));

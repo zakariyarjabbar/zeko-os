@@ -3,22 +3,16 @@
 // POST   /api/chat/messages             — send a message
 // DELETE /api/chat/messages?id=uuid     — delete a message
 //
-// Permission model:
-//   view:    user needs "view:<channelId>"    in access_flags  (or Administrator)
-//   send:    authenticated = can send (no extra perm needed)
-//   delete:  user needs "delete-msg:<channelId>" in access_flags (or Administrator)
+// view/send: channels-manager (UUID) || has view:<channelId> (name, stable)
+// delete:    own message || canDeleteChannelMessage
 
 import { NextRequest, NextResponse }        from "next/server";
 import { getSession }                        from "@/lib/auth";
 import { supabaseAdmin }                     from "@/lib/supabase/server";
-import { getEffectiveFlags }                 from "@/lib/effective-flags";
+import { getEffectivePermissions }           from "@/lib/effective-flags";
 import { asUserId }                          from "@/lib/types/ids";
-import { type Permission }                   from "@/lib/types/permission";
 import { SendChannelMessageSchema }          from "@/lib/validations/chat";
-
-function isAdmin(flags: readonly Permission[]): boolean {
-  return flags.includes("Administrator");
-}
+import { isChannelsManager, canDeleteChannelMessage } from "@/lib/permissions";
 
 // ── GET ────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
@@ -28,9 +22,21 @@ export async function GET(req: NextRequest) {
   const channelId = req.nextUrl.searchParams.get("channel");
   if (!channelId) return NextResponse.json({ error: "channel param required" }, { status: 400 });
 
-  const flags = await getEffectiveFlags(asUserId(session.id));
+  const [{ ids, flags }, channelRes] = await Promise.all([
+    getEffectivePermissions(asUserId(session.id)),
+    supabaseAdmin.from("channels").select("public, view_permission").eq("id", channelId).single(),
+  ]);
 
-  if (!isAdmin(flags) && !flags.includes(`view:${channelId}`)) {
+  const ch = channelRes.data as { public: boolean; view_permission: string | null } | null;
+  const isPublic = ch?.public === true;
+  const viewPermId = ch?.view_permission ?? null;
+
+  const canView =
+    isChannelsManager(ids) ||
+    isPublic ||
+    (viewPermId ? ids.includes(viewPermId) : flags.includes(`view:${channelId}`));
+
+  if (!canView) {
     return NextResponse.json({ error: "You do not have permission to view this channel." }, { status: 403 });
   }
 
@@ -64,9 +70,21 @@ export async function POST(req: NextRequest) {
   }
   const { channelId, text } = parsed.data;
 
-  // Must be able to view the channel to send in it
-  const flags = await getEffectiveFlags(asUserId(session.id));
-  if (!isAdmin(flags) && !flags.includes(`view:${channelId}`)) {
+  const [{ ids, flags }, channelRes] = await Promise.all([
+    getEffectivePermissions(asUserId(session.id)),
+    supabaseAdmin.from("channels").select("public, view_permission").eq("id", channelId).single(),
+  ]);
+
+  const ch = channelRes.data as { public: boolean; view_permission: string | null } | null;
+  const isPublic = ch?.public === true;
+  const viewPermId = ch?.view_permission ?? null;
+
+  const canSend =
+    isChannelsManager(ids) ||
+    isPublic ||
+    (viewPermId ? ids.includes(viewPermId) : flags.includes(`view:${channelId}`));
+
+  if (!canSend) {
     return NextResponse.json({ error: "You do not have permission to send messages in this channel." }, { status: 403 });
   }
 
@@ -75,7 +93,7 @@ export async function POST(req: NextRequest) {
     .insert({
       channel_id: channelId,
       user_id:    session.id,
-      body:       text,          // already trimmed + sanitized by Zod transform
+      body:       text,
       type:       "message",
     })
     .select("id, channel_id, user_id, body, type, created_at")
@@ -102,12 +120,11 @@ export async function DELETE(req: NextRequest) {
 
   if (!msg) return NextResponse.json({ error: "Message not found." }, { status: 404 });
 
-  const m = msg as { id: string; channel_id: string; user_id: string };
-  const flags = await getEffectiveFlags(asUserId(session.id));
+  const m     = msg as { id: string; channel_id: string; user_id: string };
+  const { ids, flags } = await getEffectivePermissions(asUserId(session.id));
   const isOwn = m.user_id === session.id;
-  const canDelete = isOwn || isAdmin(flags) || flags.includes(`delete-msg:${m.channel_id}`);
 
-  if (!canDelete) {
+  if (!canDeleteChannelMessage(ids, flags, m.channel_id, isOwn)) {
     return NextResponse.json({ error: "You do not have permission to delete this message." }, { status: 403 });
   }
 

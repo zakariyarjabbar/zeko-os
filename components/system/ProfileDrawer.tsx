@@ -245,12 +245,12 @@ export function ProfileDrawer({ open, profile, onClose }: ProfileDrawerProps) {
               <div className="px-5 py-4">
                 <SectionHeader>Access Flags</SectionHeader>
                 <div className="flex flex-wrap gap-1.5">
-                  {profile.accessFlags.map((flag) => (
+                  {profile.accessFlagNames.map((name) => (
                     <span
-                      key={flag}
+                      key={name}
                       className="font-sans text-xs text-zk-green border border-zk-green/20 bg-zk-green/[0.05] rounded px-2 py-0.5"
                     >
-                      {flag}
+                      {name}
                     </span>
                   ))}
                 </div>

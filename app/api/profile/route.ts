@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient }              from "@supabase/supabase-js";
 import { getSession }                from "@/lib/auth";
 import { supabaseAdmin }             from "@/lib/supabase/server";
-import { getEffectiveFlags }         from "@/lib/effective-flags";
+import { getEffectivePermissions }    from "@/lib/effective-flags";
 import { asUserId }                  from "@/lib/types/ids";
 import { revokeAllOthersForUser }    from "@/lib/sessions";
 
@@ -22,8 +22,8 @@ function anonClient() {
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const accessFlags = await getEffectiveFlags(asUserId(session.id));
-  return NextResponse.json({ accessFlags });
+  const { ids, flags: flagNames } = await getEffectivePermissions(asUserId(session.id));
+  return NextResponse.json({ accessFlags: ids, accessFlagNames: flagNames });
 }
 
 export async function PATCH(req: NextRequest) {

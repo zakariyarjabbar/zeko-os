@@ -10,16 +10,18 @@ import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { useProfile } from "@/components/system/SessionContext";
 import { useSystemView, type SystemView } from "@/components/system/SystemViewContext";
-import { isFounder, canViewInbox, canViewUsers } from "@/lib/permissions";
-import { type Permission, asPermission } from "@/lib/types/permission";
+import { isFounder, canViewInbox, canViewUsers, canManageRoles, canManagePermissions } from "@/lib/permissions";
+import { PERM } from "@/lib/permission-ids";
 import { getAppCache } from "@/lib/app-cache";
 
 // ─── Permission check for nav items ──────────────────────────
-function checkFlag(requireFlag: string, flags: readonly Permission[]): boolean {
-  if (requireFlag === "view-inbox")    return canViewInbox(flags);
-  if (requireFlag === "moderator")     return canViewUsers(flags);
-  if (requireFlag === "Administrator") return isFounder(flags);
-  return flags.includes(asPermission(requireFlag));
+function checkFlag(requireFlag: string, ids: readonly string[]): boolean {
+  if (requireFlag === "view-inbox")          return canViewInbox(ids);
+  if (requireFlag === "moderator")           return canViewUsers(ids);
+  if (requireFlag === "Administrator")       return isFounder(ids);
+  if (requireFlag === "roles-or-permissions") return isFounder(ids) || canManageRoles(ids) || canManagePermissions(ids);
+  // Legacy: requireFlag may be a UUID directly
+  return ids.includes(requireFlag) || ids.includes(PERM.Administrator);
 }
 
 // ─── Nav config ───────────────────────────────────────────────
@@ -35,8 +37,8 @@ const NAV_ITEMS: NavItem[] = [
   { view: "overview", label: "Overview", icon: LayoutDashboard },
   { view: "chat",     label: "Chat",     icon: MessageSquare    },
   { view: "inbox",    label: "Inbox",    icon: Inbox,       badge: "unread", requireFlag: "view-inbox" },
-  { view: "users",    label: "Users",    icon: Users,       requireFlag: "moderator" },
-  { view: "roles",    label: "Roles",    icon: ShieldCheck, requireFlag: "Administrator" },
+  { view: "users",    label: "Users",    icon: Users },
+  { view: "roles",    label: "Roles",    icon: ShieldCheck, requireFlag: "roles-or-permissions" },
   { view: "profile",  label: "Profile",  icon: UserCog },
 ];
 

@@ -1,28 +1,27 @@
 // app/api/users/[id]/route.ts
-// PATCH  /api/users/:id — update user  (moderator: username+password | admin | Administrator)
-// DELETE /api/users/:id — delete user  (admin | Administrator)
+// PATCH  /api/users/:id — update user fields (per-field permission gates)
+// DELETE /api/users/:id — delete user (Administrator only)
 //
-// Protection rules:
-//  - moderator: can only edit MODERATOR_EDITABLE_FIELDS (username, password), blocked on Administrator-flagged targets
-//  - admin: all profile fields, blocked on Administrator-flagged targets
-//  - Administrator: all fields, no restrictions
+// Field gates:
+//   username / displayName / password  → change-display-name | Administrator
+//   access_flags                       → permission-manager  | Administrator
+//   roleIds                            → roles-manager       | Administrator
 //
-// display_id is never editable — it is permanently assigned by the DB sequence on account creation.
+// display_id is never editable — permanently assigned by DB sequence on account creation.
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getEffectiveFlags } from "@/lib/effective-flags";
+import { getEffectivePermissions } from "@/lib/effective-flags";
 import { asUserId } from "@/lib/types/ids";
 import {
-  canEditUsers, canDeleteUsers, isFounder,
-  MODERATOR_EDITABLE_FIELDS,
+  canEditAnyUser, canChangeDisplayName, canManagePermissions,
+  canManageRoles, canDeleteUsers, isFounder,
 } from "@/lib/permissions";
 import { supabaseAdmin } from "@/lib/supabase/server";
 
-// Check if the target user holds the Administrator permission (via own flags OR roles)
 async function targetIsAdministrator(targetId: string): Promise<boolean> {
-  const flags = await getEffectiveFlags(asUserId(targetId));
-  return isFounder(flags);
+  const { ids } = await getEffectivePermissions(asUserId(targetId));
+  return isFounder(ids);
 }
 
 export async function PATCH(
@@ -32,16 +31,16 @@ export async function PATCH(
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const actorFlags = await getEffectiveFlags(asUserId(session.id));
+  const { ids: actorIds } = await getEffectivePermissions(asUserId(session.id));
 
-  if (!canEditUsers(actorFlags)) {
+  if (!canEditAnyUser(actorIds)) {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   }
 
   const { id } = await params;
 
-  // Administrator-protected target check (admin and moderator cannot touch them)
-  if (!isFounder(actorFlags) && await targetIsAdministrator(id)) {
+  // Non-Administrator actors cannot modify an Administrator-flagged user
+  if (!isFounder(actorIds) && await targetIsAdministrator(id)) {
     return NextResponse.json(
       { error: "Forbidden. Cannot modify a user with Administrator permission." },
       { status: 403 }
@@ -59,34 +58,23 @@ export async function PATCH(
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: "Invalid body." }, { status: 400 }); }
 
-  const isModerator = actorFlags.includes("moderator") && !actorFlags.includes("admin") && !isFounder(actorFlags);
-
-  // ── Profile fields ────────────────────────────────────────
+  // ── Profile fields ────────────────────────────────────────────
   const profileUpdate: Record<string, unknown> = {};
 
-  // Validate display_name if provided
-  if (body.displayName !== undefined) {
-    const dn = body.displayName.trim();
-    if ((dn.match(/ /g) ?? []).length > 1) {
-      return NextResponse.json({ error: "Display name may contain at most one space." }, { status: 400 });
+  if (canChangeDisplayName(actorIds)) {
+    if (body.username !== undefined) {
+      profileUpdate.username = body.username;
     }
-    body.displayName = dn;
+    if (body.displayName !== undefined) {
+      const dn = body.displayName.trim();
+      if ((dn.match(/ /g) ?? []).length > 1) {
+        return NextResponse.json({ error: "Display name may contain at most one space." }, { status: 400 });
+      }
+      profileUpdate.display_name = dn;
+    }
   }
 
-  const fieldMap: Record<string, string> = {
-    username:    "username",
-    displayName: "display_name",
-  };
-
-  for (const [key, col] of Object.entries(fieldMap)) {
-    const val = body[key as keyof typeof body];
-    if (val === undefined) continue;
-    if (isModerator && !MODERATOR_EDITABLE_FIELDS.has(key)) continue;
-    profileUpdate[col] = val;
-  }
-
-  // accessFlags — admin and Administrator only
-  if (body.accessFlags !== undefined && !isModerator) {
+  if (body.accessFlags !== undefined && canManagePermissions(actorIds)) {
     profileUpdate.access_flags = body.accessFlags;
   }
 
@@ -98,8 +86,8 @@ export async function PATCH(
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // ── Roles — admin and Administrator only ──────────────────
-  if (body.roleIds !== undefined && !isModerator) {
+  // ── Roles ─────────────────────────────────────────────────────
+  if (body.roleIds !== undefined && canManageRoles(actorIds)) {
     await supabaseAdmin.from("user_roles").delete().eq("user_id", id);
     if (body.roleIds.length > 0) {
       const { error } = await supabaseAdmin
@@ -109,8 +97,8 @@ export async function PATCH(
     }
   }
 
-  // ── Password ──────────────────────────────────────────────
-  if (body.password) {
+  // ── Password ──────────────────────────────────────────────────
+  if (body.password && canChangeDisplayName(actorIds)) {
     if (body.password.length < 8) {
       return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
     }
@@ -128,24 +116,16 @@ export async function DELETE(
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const actorFlags = await getEffectiveFlags(asUserId(session.id));
+  const { ids: actorIds } = await getEffectivePermissions(asUserId(session.id));
 
-  if (!canDeleteUsers(actorFlags)) {
-    return NextResponse.json({ error: "Forbidden. admin or Administrator permission required." }, { status: 403 });
+  if (!canDeleteUsers(actorIds)) {
+    return NextResponse.json({ error: "Forbidden. Administrator permission required." }, { status: 403 });
   }
 
   const { id } = await params;
 
   if (id === session.id) {
     return NextResponse.json({ error: "Cannot delete your own account." }, { status: 400 });
-  }
-
-  // admin cannot delete Administrator-flagged users
-  if (!isFounder(actorFlags) && await targetIsAdministrator(id)) {
-    return NextResponse.json(
-      { error: "Forbidden. Cannot delete a user with Administrator permission." },
-      { status: 403 }
-    );
   }
 
   const { error } = await supabaseAdmin.auth.admin.deleteUser(id);

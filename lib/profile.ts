@@ -3,24 +3,24 @@
 
 import { type SessionPayload } from "./auth";
 import { supabaseAdmin } from "./supabase/server";
-import { getEffectiveFlags } from "./effective-flags";
+import { getEffectivePermissions } from "./effective-flags";
 import { type SessionStatus } from "./types/user";
 import { type UserId, asUserId } from "./types/ids";
-import { type Permission } from "./types/permission";
 
 // ─── Interface ────────────────────────────────────────────────
 export interface UserProfile {
-  id:            UserId;       // branded UUID — compile-time type safety for ID comparisons
-  displayId:     number;       // sequential integer — e.g. 1, 2, 3
-  displayName:   string;       // human-readable name — letters, numbers, one space max
-  email:         string;
-  username:      string;
-  role:          string;
-  accessFlags:   Permission[]; // typed union — typos caught at compile time
-  sessionStatus: SessionStatus;
-  lastLoginIp:   string;
-  lastActive:    string;
-  sessionStart:  number;
+  id:              UserId;
+  displayId:       number;
+  displayName:     string;
+  email:           string;
+  username:        string;
+  role:            string;
+  accessFlags:     string[];    // permission UUIDs — for UUID-based guard checks
+  accessFlagNames: string[];    // resolved permission names — for display only
+  sessionStatus:   SessionStatus;
+  lastLoginIp:     string;
+  lastActive:      string;
+  sessionStart:    number;
 }
 
 // ─── DB row type ──────────────────────────────────────────────
@@ -55,20 +55,20 @@ export async function buildProfile(session: SessionPayload): Promise<UserProfile
 
   const row = (data as ProfileRow | null) ?? DEFAULT;
 
-  // Effective flags = own flags ∪ role permissions (typed at DB boundary)
-  const effectiveFlags = await getEffectiveFlags(asUserId(session.id));
+  const { ids, flags: flagNames } = await getEffectivePermissions(asUserId(session.id));
 
   return {
-    id:            asUserId(session.id), // cast at boundary — UserId inside the app
-    displayId:     row.display_id,
-    displayName:   row.display_name ?? "",
-    email:         session.email,
-    username:      row.username,
-    role:          session.role.toUpperCase(),
-    accessFlags:   effectiveFlags,
-    sessionStatus: (row.session_status as SessionStatus) ?? "OFFLINE",
-    lastLoginIp:   row.last_login_ip,
-    lastActive:    row.last_active,
-    sessionStart:  Date.now(),
+    id:              asUserId(session.id),
+    displayId:       row.display_id,
+    displayName:     row.display_name ?? "",
+    email:           session.email,
+    username:        row.username,
+    role:            session.role.toUpperCase(),
+    accessFlags:     ids,        // UUIDs
+    accessFlagNames: flagNames,  // resolved names (for display)
+    sessionStatus:   (row.session_status as SessionStatus) ?? "OFFLINE",
+    lastLoginIp:     row.last_login_ip,
+    lastActive:      row.last_active,
+    sessionStart:    Date.now(),
   };
 }

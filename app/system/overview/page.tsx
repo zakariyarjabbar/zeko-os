@@ -648,7 +648,7 @@ export default function OverviewPage() {
                 const online = op.profile?.session_status === "ONLINE";
                 const username = op.profile?.username ?? "—";
                 const display  = op.profile?.display_name || username;
-                const role     = op.roles[0]?.name ?? (op.profile?.access_flags.includes("Administrator") ? "ADMIN" : "USER");
+                const role     = op.roles[0]?.name ?? (op.profile?.access_flags?.includes("c3ea3541-3bd7-40e6-aefe-29dc1a455088") ? "ADMIN" : "USER");
 
                 return (
                   <div
