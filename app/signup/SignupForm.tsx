@@ -499,7 +499,7 @@ export default function SignupForm() {
               <button
                 type="button"
                 onClick={handleSendCode}
-                disabled={!canSendCode || evStage === "sending"}
+                disabled={!canSendCode}
                 className="w-full font-mono text-[11px] tracking-[0.18em] uppercase py-2 px-4 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{
                   border:     "1px solid rgba(0,255,65,0.30)",
