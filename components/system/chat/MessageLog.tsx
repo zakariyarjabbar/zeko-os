@@ -1,39 +1,35 @@
 // components/system/chat/MessageLog.tsx
-// Grouped message log — consecutive messages from the same user
-// within 5 minutes are collapsed into a single visual group.
-//
-// Display names are resolved live from `userProfiles` so renaming
-// a user is reflected immediately without stale handles.
-// Clicking an avatar or name opens a small UserProfileCard popover.
+// Grouped message log with:
+//   • Inline message editing (own messages)
+//   • "(edited)" label + admin edit-history popover
+//   • DM read receipts (✓ sent, ✓✓ seen)
+//   • @mention highlighting
 
 "use client";
 
-import { useEffect, useRef, useMemo, useState, useCallback, memo } from "react";
-import { Trash2 }            from "lucide-react";
-import { cn }                from "@/lib/utils";
-import { type ChatMessage }  from "./types";
-import { UserProfileCard }   from "./UserProfileCard";
+import {
+  useEffect, useRef, useMemo, useState, useCallback, memo,
+} from "react";
+import { Trash2, Pencil, Check, CheckCheck, X, Save }
+  from "lucide-react";
+import { cn }               from "@/lib/utils";
+import { type ChatMessage } from "./types";
+import { UserProfileCard }  from "./UserProfileCard";
 
-// ─── Props ────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────
 interface MessageLogProps {
   messages:      ChatMessage[];
   canDelete:     boolean;
   onDelete:      (id: string) => void;
+  onEdit:        (id: string, text: string) => void;
   currentUserId: string;
   loading?:      boolean;
-  /** Current resolved display names: userId → { displayName, username } */
   userProfiles?: Record<string, { displayName: string; username: string }>;
-  /** Live online/offline map used in the profile popover */
   presence?:     Record<string, "ONLINE" | "OFFLINE">;
-  /** Called when the user clicks "Send Direct Message" inside the popover */
   onOpenDm?:    (userId: string, username: string) => void;
-  /** True when viewing a DM — delete is restricted to sender-only regardless of canDelete */
   isDm?:        boolean;
-  /**
-   * Changes whenever the active channel/DM switches.
-   * Used to reset the "seen ids" tracker so animations don't carry over.
-   */
   conversationKey?: string;
+  isAdmin?:     boolean;
 }
 
 // ─── Message grouping ─────────────────────────────────────────
@@ -41,10 +37,9 @@ const GROUP_THRESHOLD_MS = 5 * 60 * 1000;
 
 interface MessageGroup {
   id:        string;
-  user:      string;   // stored handle (fallback only)
+  user:      string;
   userId:    string;
   timestamp: string;
-  isoTime:   string;
   messages:  ChatMessage[];
   type:      "message" | "system";
 }
@@ -56,7 +51,7 @@ function buildGroups(messages: ChatMessage[]): MessageGroup[] {
     if (msg.type === "system") {
       groups.push({
         id: msg.id, user: "SYSTEM", userId: "",
-        timestamp: msg.timestamp, isoTime: msg.timestamp,
+        timestamp: msg.timestamp,
         messages: [msg], type: "system",
       });
       continue;
@@ -65,7 +60,6 @@ function buildGroups(messages: ChatMessage[]): MessageGroup[] {
     const last         = groups[groups.length - 1];
     const msgTime      = parseTimestamp(msg.timestamp);
     const lastTime     = last ? parseTimestamp(last.timestamp) : 0;
-    // Group by userId (not stored handle) so renames don't break grouping
     const sameUser     = last && last.userId === msg.userId && last.type === "message";
     const withinWindow = sameUser && (msgTime - lastTime) < GROUP_THRESHOLD_MS;
 
@@ -77,7 +71,6 @@ function buildGroups(messages: ChatMessage[]): MessageGroup[] {
         user:      msg.user,
         userId:    msg.userId,
         timestamp: msg.timestamp,
-        isoTime:   msg.timestamp,
         messages:  [msg],
         type:      "message",
       });
@@ -87,13 +80,25 @@ function buildGroups(messages: ChatMessage[]): MessageGroup[] {
   return groups;
 }
 
-// HH:MM:SS → comparable ms (same-day approximation)
 function parseTimestamp(ts: string): number {
   const [h, m, s] = ts.split(":").map(Number);
   return (h * 3600 + m * 60 + (s || 0)) * 1000;
 }
 
 function shortTime(ts: string): string { return ts.slice(0, 5); }
+
+// ─── @mention highlight ───────────────────────────────────────
+const MENTION_SPLIT = /(@[a-z][a-z0-9_-]{0,29})/gi;
+const MENTION_TEST  = /^@[a-z][a-z0-9_-]{0,29}$/i;
+
+function renderText(text: string): React.ReactNode {
+  const parts = text.split(MENTION_SPLIT);
+  return parts.map((part, i) =>
+    MENTION_TEST.test(part)
+      ? <span key={i} className="text-zk-amber/90 font-semibold">{part}</span>
+      : <span key={i}>{part}</span>
+  );
+}
 
 // ─── Avatar helpers ───────────────────────────────────────────
 const AVATAR_COLORS = [
@@ -112,14 +117,243 @@ function initial(name: string): string {
   return (name?.[0] ?? "?").toUpperCase();
 }
 
+// ─── Edit-history popover ─────────────────────────────────────
+interface EditEntry { id: string; old_body: string; new_body: string; edited_at: string }
+
+function EditHistoryPopover({
+  messageId, onClose,
+}: { messageId: string; onClose: () => void }) {
+  const [entries, setEntries] = useState<EditEntry[] | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch(`/api/chat/edits?messageId=${messageId}`)
+      .then((r) => r.json())
+      .then((d: EditEntry[]) => setEntries(d))
+      .catch(() => setEntries([]));
+  }, [messageId]);
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        "absolute z-50 bottom-full mb-1 left-0",
+        "w-72 bg-zk-surface border border-zk-border/60 rounded-sm shadow-xl p-2",
+      )}
+    >
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="font-sans text-[10px] text-zk-muted/50 uppercase tracking-wider">
+          Edit history
+        </span>
+        <button onClick={onClose} className="text-zk-muted/30 hover:text-zk-white">
+          <X size={10} />
+        </button>
+      </div>
+
+      {entries === null ? (
+        <p className="font-sans text-xs text-zk-muted/30 py-1">Loading…</p>
+      ) : entries.length === 0 ? (
+        <p className="font-sans text-xs text-zk-muted/30 py-1">No history found.</p>
+      ) : (
+        entries.map((e) => (
+          <div key={e.id} className="mb-2 last:mb-0">
+            <p className="font-sans text-[10px] text-zk-muted/35 mb-0.5">
+              {new Date(e.edited_at).toLocaleTimeString()}
+            </p>
+            <p className="font-mono text-[10px] text-zk-red/60 line-through leading-relaxed">
+              {e.old_body}
+            </p>
+            <p className="font-mono text-[10px] text-zk-green/70 leading-relaxed">
+              {e.new_body}
+            </p>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+// ─── Single message line ──────────────────────────────────────
+interface MessageLineProps {
+  msg:        ChatMessage;
+  isOwnGroup: boolean;
+  isDm:       boolean;
+  showDelete: boolean;
+  onDelete:   (id: string) => void;
+  onEdit:     (id: string, text: string) => void;
+  newIds:     Set<string>;
+  isAdmin:    boolean;
+}
+
+function MessageLine({
+  msg, isOwnGroup, isDm, showDelete, onDelete, onEdit, newIds, isAdmin,
+}: MessageLineProps) {
+  const [editing,      setEditing]      = useState(false);
+  const [editText,     setEditText]     = useState(msg.text);
+  const [showHistory,  setShowHistory]  = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Sync editText when msg.text changes externally (e.g. SSE update event)
+  useEffect(() => {
+    if (!editing) setEditText(msg.text);
+  }, [msg.text, editing]);
+
+  function startEdit() {
+    setEditText(msg.text);
+    setEditing(true);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+    setEditText(msg.text);
+  }
+
+  function saveEdit() {
+    const trimmed = editText.trim();
+    if (trimmed && trimmed !== msg.text) onEdit(msg.id, trimmed);
+    setEditing(false);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(); }
+    if (e.key === "Escape") cancelEdit();
+  }
+
+  const isOptimistic = msg.id.startsWith("opt-");
+  const canEdit = isOwnGroup && !isOptimistic;
+
+  // Read receipts — only on own DM messages
+  const showReceipt = isDm && isOwnGroup && !isOptimistic;
+
+  if (editing) {
+    return (
+      <div className="mt-0.5 flex flex-col gap-1">
+        <input
+          ref={inputRef}
+          type="text"
+          value={editText}
+          onChange={(e) => setEditText(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className={cn(
+            "w-full bg-zk-green/5 border border-zk-green/25 rounded-sm px-2 py-1",
+            "font-mono text-[12px] text-zk-white outline-none caret-zk-green",
+          )}
+        />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={saveEdit}
+            disabled={!editText.trim()}
+            className="flex items-center gap-1 font-sans text-[10px] text-zk-green/80 hover:text-zk-green disabled:opacity-30"
+          >
+            <Save size={9} /> save
+          </button>
+          <button
+            onClick={cancelEdit}
+            className="flex items-center gap-1 font-sans text-[10px] text-zk-muted/40 hover:text-zk-white"
+          >
+            <X size={9} /> cancel
+          </button>
+          <span className="font-sans text-[9px] text-zk-muted/20 select-none">
+            Enter · Esc to cancel
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn("group/msg flex items-start gap-2")}>
+      {/* Message text */}
+      <span className={cn(
+        "font-mono text-[12px] text-zk-white/90 leading-relaxed break-words min-w-0 flex-1",
+        isOptimistic && "opacity-50",
+        newIds.has(msg.id) && "animate-msg-decode",
+      )}>
+        {renderText(msg.text)}
+        {msg.edited && (
+          <span className="relative ml-1">
+            {isAdmin ? (
+              <>
+                <button
+                  onClick={() => setShowHistory((v) => !v)}
+                  className="font-sans text-[9px] text-zk-muted/30 hover:text-zk-amber/60 transition-colors"
+                >
+                  (edited)
+                </button>
+                {showHistory && (
+                  <EditHistoryPopover
+                    messageId={msg.id}
+                    onClose={() => setShowHistory(false)}
+                  />
+                )}
+              </>
+            ) : (
+              <span className="font-sans text-[9px] text-zk-muted/30">(edited)</span>
+            )}
+          </span>
+        )}
+      </span>
+
+      {/* Hover actions */}
+      <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover/msg:opacity-100 transition-opacity duration-100">
+        <span className="font-sans text-xs text-zk-muted/30 select-none">
+          {msg.timestamp}
+        </span>
+
+        {/* Edit button — own messages only */}
+        {canEdit && (
+          <button
+            onClick={startEdit}
+            aria-label="Edit message"
+            className="p-0.5 rounded-sm text-zk-muted/30 hover:text-zk-cyan hover:bg-zk-cyan/10 transition-colors"
+          >
+            <Pencil size={10} />
+          </button>
+        )}
+
+        {/* Delete button */}
+        {showDelete && !isOptimistic && (
+          <button
+            onClick={() => onDelete(msg.id)}
+            aria-label="Delete message"
+            className="p-0.5 rounded-sm text-zk-muted/30 hover:text-zk-red hover:bg-zk-red/10 transition-colors"
+          >
+            <Trash2 size={10} />
+          </button>
+        )}
+
+        {/* Read receipts */}
+        {showReceipt && (
+          <span className={cn(
+            "transition-colors",
+            msg.read ? "text-zk-cyan/60" : "text-zk-muted/25",
+          )}>
+            {msg.read
+              ? <CheckCheck size={10} />
+              : <Check size={10} />
+            }
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── System message ───────────────────────────────────────────
 function SystemLine({ msg }: { msg: ChatMessage }) {
   return (
     <div className="flex items-center gap-3 py-2 my-1">
       <div className="flex-1 h-px bg-zk-amber/15" />
-      <span className="font-sans text-xs text-zk-amber/50 px-2">
-        *** {msg.text}
-      </span>
+      <span className="font-sans text-xs text-zk-amber/50 px-2">*** {msg.text}</span>
       <div className="flex-1 h-px bg-zk-amber/15" />
     </div>
   );
@@ -128,24 +362,26 @@ function SystemLine({ msg }: { msg: ChatMessage }) {
 // ─── Message group ────────────────────────────────────────────
 interface MessageGroupBlockProps {
   group:        MessageGroup;
-  displayName:  string;   // resolved current name
+  displayName:  string;
   canDelete:    boolean;
   onDelete:     (id: string) => void;
+  onEdit:       (id: string, text: string) => void;
   isOwnGroup:   boolean;
   isDm:         boolean;
   onAvatarClick: (e: React.MouseEvent) => void;
   newIds:       Set<string>;
+  isAdmin:      boolean;
 }
 
 function MessageGroupBlock({
-  group, displayName, canDelete, onDelete, isOwnGroup, isDm, onAvatarClick, newIds,
+  group, displayName, canDelete, onDelete, onEdit,
+  isOwnGroup, isDm, onAvatarClick, newIds, isAdmin,
 }: MessageGroupBlockProps) {
   const showDelete = isDm ? isOwnGroup : canDelete;
-  const color = avatarColor(group.userId);  // userId is stable even after renames
+  const color = avatarColor(group.userId);
 
   return (
     <div className="flex items-start gap-3 py-1 group/block">
-      {/* Clickable avatar */}
       <button
         onClick={onAvatarClick}
         aria-label={`View ${displayName}'s profile`}
@@ -159,11 +395,8 @@ function MessageGroupBlock({
         {initial(displayName)}
       </button>
 
-      {/* Messages */}
       <div className="flex-1 min-w-0">
-        {/* Header row */}
         <div className="flex items-baseline gap-2 mb-0.5">
-          {/* Clickable username */}
           <button
             onClick={onAvatarClick}
             className={cn(
@@ -179,36 +412,18 @@ function MessageGroupBlock({
           </span>
         </div>
 
-        {/* Message lines */}
         {group.messages.map((msg, i) => (
-          <div
+          <MessageLine
             key={msg.id}
-            className={cn("group/msg flex items-start gap-2", i > 0 && "mt-0.5")}
-          >
-            <span className={cn(
-              "font-mono text-[12px] text-zk-white/90 leading-relaxed break-words min-w-0 flex-1",
-              msg.id.startsWith("opt-") && "opacity-50",
-              newIds.has(msg.id) && "animate-msg-decode",
-            )}>
-              {msg.text}
-            </span>
-
-            {/* Per-message hover actions */}
-            <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover/msg:opacity-100 transition-opacity duration-100">
-              <span className="font-sans text-xs text-zk-muted/30 select-none">
-                {msg.timestamp}
-              </span>
-              {showDelete && !msg.id.startsWith("opt-") && (
-                <button
-                  onClick={() => onDelete(msg.id)}
-                  aria-label="Delete message"
-                  className="p-0.5 rounded-sm text-zk-muted/30 hover:text-zk-red hover:bg-zk-red/10 transition-colors"
-                >
-                  <Trash2 size={10} />
-                </button>
-              )}
-            </div>
-          </div>
+            msg={msg}
+            isOwnGroup={isOwnGroup}
+            isDm={isDm}
+            showDelete={showDelete}
+            onDelete={onDelete}
+            onEdit={onEdit}
+            newIds={newIds}
+            isAdmin={isAdmin}
+          />
         ))}
       </div>
     </div>
@@ -285,43 +500,32 @@ interface PopoverState {
 
 // ─── Component ────────────────────────────────────────────────
 export function MessageLog({
-  messages, canDelete, onDelete, currentUserId, loading,
-  userProfiles = {}, presence = {}, onOpenDm, isDm = false, conversationKey,
+  messages, canDelete, onDelete, onEdit, currentUserId, loading,
+  userProfiles = {}, presence = {}, onOpenDm, isDm = false,
+  conversationKey, isAdmin = false,
 }: MessageLogProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [popover, setPopover] = useState<PopoverState | null>(null);
 
-  // ── Decode-animation tracking ─────────────────────────────
-  // seenIds holds every message ID that has already been rendered at least once.
-  // On mount and on conversation switch, all current IDs are pre-seeded so
-  // they never animate. Only IDs that arrive AFTER the initial render get the
-  // msg-decode animation.
   const seenIds = useRef<Set<string>>(new Set());
 
-  // Reset when the conversation changes (channel/DM switch)
   useEffect(() => {
     seenIds.current = new Set();
   }, [conversationKey]);
 
-  // After every render, record all displayed IDs as seen
   useEffect(() => {
     messages.forEach((m) => seenIds.current.add(m.id));
   });
 
-  // Compute which IDs are genuinely new THIS render cycle
-  // (not yet in seenIds = arrived via SSE while page was open)
   const newIds = useMemo(() => {
     const s = new Set<string>();
     for (const m of messages) {
-      if (!seenIds.current.has(m.id) && !m.id.startsWith("opt-")) {
-        s.add(m.id);
-      }
+      if (!seenIds.current.has(m.id) && !m.id.startsWith("opt-")) s.add(m.id);
     }
     return s;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages]); // seenIds.current intentionally omitted — it's a mutable ref
+  }, [messages]);
 
-  // Flat list of { separator | group } items grouped by date
   const items = useMemo(() => {
     type Item =
       | { kind: "separator"; date: string }
@@ -369,9 +573,7 @@ export function MessageLog({
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-2">
         <span className="text-3xl text-zk-border select-none">⬚</span>
-        <span className="font-sans text-sm text-zk-muted/30">
-          No messages
-        </span>
+        <span className="font-sans text-sm text-zk-muted/30">No messages</span>
       </div>
     );
   }
@@ -388,7 +590,6 @@ export function MessageLog({
             return <SystemLine key={group.id} msg={group.messages[0]} />;
           }
 
-          // Resolve the current display name — fall back to stored handle
           const profile     = userProfiles[group.userId];
           const displayName = profile?.displayName || profile?.username || group.user;
 
@@ -399,17 +600,18 @@ export function MessageLog({
               displayName={displayName}
               canDelete={canDelete}
               onDelete={onDelete}
+              onEdit={onEdit}
               isOwnGroup={group.userId === currentUserId}
               isDm={isDm}
               onAvatarClick={(e) => handleAvatarClick(e, group)}
               newIds={newIds}
+              isAdmin={isAdmin}
             />
           );
         })}
         <div ref={bottomRef} />
       </div>
 
-      {/* Profile popover */}
       {popover && (
         <UserProfileCard
           userId={popover.userId}

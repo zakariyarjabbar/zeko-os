@@ -150,6 +150,15 @@ class ChatCacheStore {
     e.data = e.data.filter((m) => m.id !== msgId);
   }
 
+  /** Patch fields on an existing cached message (edit, read-receipt, etc.). */
+  patchMessage(key: string, msgId: string, patch: Partial<ChatMessage>): void {
+    const e = this.msgs.get(key);
+    if (!e) return;
+    const idx = e.data.findIndex((m) => m.id === msgId);
+    if (idx < 0) return;
+    e.data[idx] = { ...e.data[idx], ...patch };
+  }
+
   /** Evict the least-recently-used channel if we've hit the cap. */
   private evictOldestIfFull(): void {
     if (this.msgs.size < MAX_CACHED_CHANNELS) return;

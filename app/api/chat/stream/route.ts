@@ -2,32 +2,17 @@
 // GET /api/chat/stream?type=channel&id=<channelId>&since=<ISO>
 // GET /api/chat/stream?type=dm&with=<userId>&since=<ISO>
 //
-// Two-layer real-time delivery:
+// Events delivered:
+//   connected  — stream open confirmation
+//   msg        — new messages (INSERT on messages / direct_messages)
+//   update     — edited messages (UPDATE on messages / direct_messages)
+//   read       — DM read-receipt: { id } — message was marked read by recipient
+//   typing     — typing indicators: Array<{ user_id, handle, updated_at }>
+//   notif      — new @mention notification (INSERT on notifications for this user)
 //
-//   Layer 1 — Supabase Realtime (postgres_changes)
-//     Delivers new rows the instant the DB commit is visible to the
-//     replication slot — typically 50-150 ms end-to-end.
-//     Requires "Realtime" to be enabled for each table in the Supabase
-//     dashboard: Database → Replication → supabase_realtime publication.
-//
-//   Layer 2 — Fallback DB poll (every 3 s)
-//     Queries only for rows newer than the last-seen timestamp.
-//     When Realtime is working, that timestamp is already advanced by
-//     the Realtime callback so the poll returns 0 rows (near-zero cost).
-//     When Realtime is unavailable, this is the sole delivery mechanism
-//     (≤ 3 s latency — the same as before, just a longer interval because
-//     the Realtime layer handles the fast path).
-//
-// Security:
-//   • Auth + permission checked BEFORE the stream starts — no re-checks
-//     during the stream (same as before)
-//   • Channel: requires view:<id> flag or Administrator
-//   • DM:      participant identity enforced in both the Realtime callback
-//              (server-side filter) and the fallback SQL query
-//   • Supabase Realtime subscription uses the service-role key (server only)
-//     — never exposed to the client
-//   • All Realtime payloads are filtered server-side before being forwarded;
-//     no extra data leaks out
+// Two-layer delivery:
+//   Layer 1 — Supabase Realtime (postgres_changes) — ~50-150 ms
+//   Layer 2 — Fallback DB poll every 3 s (also delivers typing list as snapshot)
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,8 +26,9 @@ import { channelPerm }        from "@/lib/types/permission";
 import { supabaseAdmin }      from "@/lib/supabase/server";
 import { StreamParamsSchema } from "@/lib/validations/chat";
 
-const POLL_MS      = 3_000;   // fallback poll — Realtime handles the fast path
-const KA_MS        = 25_000;  // keepalive interval (proxy timeout prevention)
+const POLL_MS      = 3_000;
+const KA_MS        = 25_000;
+const TYPING_TTL   = 5_000;   // rows older than this are considered stale
 const FALLBACK_ISO = new Date(Date.now() - 10_000).toISOString();
 
 const enc = new TextEncoder();
@@ -58,7 +44,7 @@ export async function GET(req: NextRequest) {
   // ── Auth ───────────────────────────────────────────────────
   const session = await getSession();
   if (!session) return new Response("Unauthorized", { status: 401 });
-  const sessionId = session.id; // extract before async closures (strict null safety)
+  const sessionId = session.id;
 
   // ── Param validation ───────────────────────────────────────
   const rawParams = Object.fromEntries(req.nextUrl.searchParams.entries());
@@ -72,7 +58,7 @@ export async function GET(req: NextRequest) {
   const params = parsed.data;
   const since  = params.since ?? FALLBACK_ISO;
 
-  // ── Permission check (done once, before stream opens) ─────
+  // ── Permission check ───────────────────────────────────────
   if (params.type === "channel") {
     const [{ ids, flags }, channelRes] = await Promise.all([
       getEffectivePermissions(asUserId(sessionId)),
@@ -87,20 +73,17 @@ export async function GET(req: NextRequest) {
       (viewPermId ? ids.includes(viewPermId) : flags.includes(channelPerm("view", params.id)));
     if (!canView) return new Response("Forbidden", { status: 403 });
   }
-  // DM: participant identity is enforced in the Realtime callback filter
-  // and in the fallback SQL .or() query below
 
   // ── Shared state ───────────────────────────────────────────
   let closed     = false;
   let rtChannel: ReturnType<typeof supabaseAdmin.channel> | null = null;
   let pollTimer:  ReturnType<typeof setTimeout>            | null = null;
 
-  /** Single teardown path — called on abort AND on ReadableStream cancel. */
   function cleanup(): void {
     if (closed) return;
     closed = true;
     if (rtChannel) {
-      supabaseAdmin.removeChannel(rtChannel).catch(() => {/* best-effort */});
+      supabaseAdmin.removeChannel(rtChannel).catch(() => {});
       rtChannel = null;
     }
     if (pollTimer) {
@@ -119,109 +102,156 @@ export async function GET(req: NextRequest) {
       let lastTs = since;
       let kaTick = Date.now();
 
-      /**
-       * Push rows to the client.
-       * Updates `lastTs` so the fallback poll never re-delivers rows that
-       * Realtime already delivered.
-       */
       function push(rows: unknown[]): void {
         if (closed || rows.length === 0) return;
         const last = (rows[rows.length - 1] as { created_at: string }).created_at;
         if (last > lastTs) lastTs = last;
-        try {
-          controller.enqueue(encode("msg", rows));
-        } catch {
-          // Controller already closed — suppress the error
-        }
+        try { controller.enqueue(encode("msg", rows)); } catch { /* stream closed */ }
+      }
+
+      function pushUpdate(rows: unknown[]): void {
+        if (closed || rows.length === 0) return;
+        try { controller.enqueue(encode("update", rows)); } catch {}
+      }
+
+      function pushRead(id: string): void {
+        if (closed) return;
+        try { controller.enqueue(encode("read", { id })); } catch {}
+      }
+
+      function pushTyping(typers: unknown[]): void {
+        if (closed) return;
+        try { controller.enqueue(encode("typing", typers)); } catch {}
       }
 
       // ── Layer 1: Supabase Realtime ────────────────────────────────────────
-      // Fires the callback the moment the DB commit is replicated.
-      // Unique channel name prevents subscription conflicts across concurrent
-      // connections from different users / browser tabs.
       const chanId =
         `chat-${params.type}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+      const me   = sessionId;
+      const them = params.type === "dm" ? params.with! : "";
+
+      // Typing context: canonical sorted pair for DMs
+      const typingCtx = params.type === "channel"
+        ? `channel:${params.id}`
+        : `dm:${[me, them].sort().join(":")}`;
+
+      let builder = supabaseAdmin.channel(chanId);
+
       if (params.type === "channel") {
-        rtChannel = supabaseAdmin
-          .channel(chanId)
-          .on(
-            "postgres_changes",
-            {
-              event:  "INSERT",
-              schema: "public",
-              table:  "messages",
-              filter: `channel_id=eq.${params.id}`,   // server-side pre-filter
-            },
-            (payload) => push([payload.new]),
-          )
-          .subscribe();
+        builder = builder
+          // New messages
+          .on("postgres_changes", {
+            event: "INSERT", schema: "public", table: "messages",
+            filter: `channel_id=eq.${params.id}`,
+          }, (payload) => push([payload.new]))
+          // Edits
+          .on("postgres_changes", {
+            event: "UPDATE", schema: "public", table: "messages",
+            filter: `channel_id=eq.${params.id}`,
+          }, (payload) => pushUpdate([payload.new]));
 
       } else {
-        // DM — Realtime filter only supports single-column eq, so we filter
-        // both directions in the callback.  The callback runs server-side and
-        // only forwards rows that belong to THIS conversation.
-        const me   = session.id;
-        const them = params.with!;
+        builder = builder
+          // New DMs
+          .on("postgres_changes", {
+            event: "INSERT", schema: "public", table: "direct_messages",
+          }, (payload) => {
+            const r = payload.new as { from_user_id: string; to_user_id: string };
+            if (
+              (r.from_user_id === me && r.to_user_id === them) ||
+              (r.from_user_id === them && r.to_user_id === me)
+            ) push([payload.new]);
+          })
+          // DM edits + read receipts
+          .on("postgres_changes", {
+            event: "UPDATE", schema: "public", table: "direct_messages",
+          }, (payload) => {
+            const n = payload.new as {
+              id: string; from_user_id: string; to_user_id: string; read: boolean;
+            };
+            const o = payload.old as { read?: boolean } | undefined;
+            if (
+              !((n.from_user_id === me && n.to_user_id === them) ||
+                (n.from_user_id === them && n.to_user_id === me))
+            ) return;
 
-        rtChannel = supabaseAdmin
-          .channel(chanId)
-          .on(
-            "postgres_changes",
-            { event: "INSERT", schema: "public", table: "direct_messages" },
-            (payload) => {
-              const r = payload.new as { from_user_id: string; to_user_id: string };
-              if (
-                (r.from_user_id === me   && r.to_user_id === them) ||
-                (r.from_user_id === them && r.to_user_id === me)
-              ) {
-                push([payload.new]);
-              }
-            },
-          )
-          .subscribe();
+            // Distinguish read-receipt flip from a body edit
+            const becameRead = o?.read === false && n.read === true;
+            if (becameRead) {
+              pushRead(n.id);
+            } else {
+              pushUpdate([payload.new]);
+            }
+          });
       }
 
+      // Typing indicators — shared for both stream types
+      builder = builder.on("postgres_changes", {
+        event: "*", schema: "public", table: "typing_indicators",
+        filter: `context=eq.${typingCtx}`,
+      }, (payload) => {
+        const row = payload.new as { user_id: string; handle: string; updated_at: string };
+        if (row.user_id === me) return;   // ignore own indicator
+        const age = Date.now() - new Date(row.updated_at).getTime();
+        if (age < TYPING_TTL) pushTyping([row]);
+      });
+
+      // @mention notifications for this user
+      builder = builder.on("postgres_changes", {
+        event: "INSERT", schema: "public", table: "notifications",
+        filter: `user_id=eq.${me}`,
+      }, (payload) => {
+        if (closed) return;
+        try { controller.enqueue(encode("notif", payload.new)); } catch {}
+      });
+
+      rtChannel = builder.subscribe();
+
       // ── Layer 2: Fallback DB poll ─────────────────────────────────────────
-      // Runs every 3 s.  When Realtime is delivering messages, `lastTs` is
-      // already advanced, so the query returns 0 rows for near-zero cost.
-      // When Realtime is unavailable (table not in replication slot, or a
-      // brief reconnect window), this is the sole delivery mechanism.
       async function poll(): Promise<void> {
         if (closed) return;
 
         try {
-          let newRows: unknown[] = [];
-
+          // New messages
           if (params.type === "channel") {
             const { data } = await supabaseAdmin
               .from("messages")
-              .select("id, channel_id, user_id, body, type, created_at")
+              .select("id, channel_id, user_id, body, type, created_at, edited_at")
               .eq("channel_id", params.id)
               .gt("created_at", lastTs)
               .order("created_at", { ascending: true })
               .limit(50);
-            newRows = data ?? [];
+            push(data ?? []);
 
           } else {
             const { data } = await supabaseAdmin
               .from("direct_messages")
-              .select("id, from_user_id, to_user_id, from_handle, to_handle, body, read, created_at")
+              .select("id, from_user_id, to_user_id, from_handle, to_handle, body, read, created_at, edited_at")
               .or(
-                `and(from_user_id.eq.${sessionId},to_user_id.eq.${params.with}),` +
-                `and(from_user_id.eq.${params.with},to_user_id.eq.${sessionId})`,
+                `and(from_user_id.eq.${sessionId},to_user_id.eq.${them}),` +
+                `and(from_user_id.eq.${them},to_user_id.eq.${sessionId})`,
               )
               .gt("created_at", lastTs)
               .order("created_at", { ascending: true })
               .limit(50);
-            newRows = data ?? [];
+            push(data ?? []);
           }
 
-          push(newRows);
+          // Typing indicators snapshot (fallback when Realtime is unavailable)
+          const cutoff = new Date(Date.now() - TYPING_TTL).toISOString();
+          const { data: typers } = await supabaseAdmin
+            .from("typing_indicators")
+            .select("user_id, handle, updated_at")
+            .eq("context", typingCtx)
+            .neq("user_id", me)
+            .gte("updated_at", cutoff);
 
-          // Keepalive comment — prevents proxy / load-balancer timeouts
+          pushTyping(typers ?? []);
+
+          // Keepalive
           if (!closed && Date.now() - kaTick > KA_MS) {
-            try { controller.enqueue(comment("ka")); } catch { /* stream closed */ }
+            try { controller.enqueue(comment("ka")); } catch {}
             kaTick = Date.now();
           }
         } catch {
@@ -231,8 +261,6 @@ export async function GET(req: NextRequest) {
         if (!closed) pollTimer = setTimeout(poll, POLL_MS);
       }
 
-      // Start the fallback poll after one interval so the client's initial
-      // message load can finish before we start pushing new rows.
       pollTimer = setTimeout(poll, POLL_MS);
     },
 
@@ -246,7 +274,7 @@ export async function GET(req: NextRequest) {
       "Content-Type":      "text/event-stream",
       "Cache-Control":     "no-cache, no-transform",
       "Connection":        "keep-alive",
-      "X-Accel-Buffering": "no",   // disable nginx / Vercel edge buffering
+      "X-Accel-Buffering": "no",
     },
   });
 }

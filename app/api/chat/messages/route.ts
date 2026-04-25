@@ -1,10 +1,12 @@
 // app/api/chat/messages/route.ts
 // GET    /api/chat/messages?channel=id  — fetch messages
-// POST   /api/chat/messages             — send a message
+// POST   /api/chat/messages             — send a message (+ fires @mention notifications)
+// PATCH  /api/chat/messages             — edit own message
 // DELETE /api/chat/messages?id=uuid     — delete a message
 //
 // view/send: channels-manager (UUID) || has view:<channelId> (name, stable)
 // delete:    own message || canDeleteChannelMessage
+// edit:      own message only
 
 import { NextRequest, NextResponse }        from "next/server";
 import { getSession }                        from "@/lib/auth";
@@ -13,6 +15,46 @@ import { getEffectivePermissions }           from "@/lib/effective-flags";
 import { asUserId }                          from "@/lib/types/ids";
 import { SendChannelMessageSchema }          from "@/lib/validations/chat";
 import { isChannelsManager, canDeleteChannelMessage } from "@/lib/permissions";
+import { z }                                 from "zod";
+
+// ── Shared helpers ─────────────────────────────────────────────
+
+const MENTION_RE = /@([a-z][a-z0-9_-]{0,29})/gi;
+
+async function fireMentionNotifications(
+  text:      string,
+  messageId: string,
+  channelId: string,
+  senderId:  string,
+  senderHandle: string,
+) {
+  const matches = [...text.matchAll(MENTION_RE)].map((m) => m[1].toLowerCase());
+  const unique  = [...new Set(matches)];
+  if (unique.length === 0) return;
+
+  const { data: mentioned } = await supabaseAdmin
+    .from("profiles")
+    .select("id, username")
+    .in("username", unique);
+
+  const recipients = (mentioned ?? []).filter(
+    (p: { id: string }) => p.id !== senderId,
+  );
+  if (recipients.length === 0) return;
+
+  await supabaseAdmin.from("notifications").insert(
+    recipients.map((p: { id: string }) => ({
+      user_id:      p.id,
+      type:         "mention",
+      source_type:  "channel",
+      source_id:    messageId,
+      channel_id:   channelId,
+      from_user_id: senderId,
+      from_handle:  senderHandle,
+      body:         text.slice(0, 200),
+    })),
+  );
+}
 
 // ── GET ────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
@@ -101,7 +143,63 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // Fire @mention notifications in the background (non-blocking)
+  const senderHandle = (session.name ?? "unknown").toLowerCase();
+  fireMentionNotifications(text, data.id, channelId, session.id, senderHandle).catch(() => {});
+
   return NextResponse.json(data);
+}
+
+// ── PATCH ──────────────────────────────────────────────────────
+export async function PATCH(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  let raw: unknown;
+  try { raw = await req.json(); }
+  catch { return NextResponse.json({ error: "Invalid body." }, { status: 400 }); }
+
+  const parsed = z.object({
+    id:   z.string().uuid("Invalid message id."),
+    text: z.string().min(1).max(4000),
+  }).safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload." }, { status: 400 });
+  }
+  const { id: msgId, text: newBody } = parsed.data;
+
+  const { data: msg } = await supabaseAdmin
+    .from("messages")
+    .select("id, channel_id, user_id, body")
+    .eq("id", msgId)
+    .single();
+
+  if (!msg) return NextResponse.json({ error: "Message not found." }, { status: 404 });
+
+  const m = msg as { id: string; channel_id: string; user_id: string; body: string };
+  if (m.user_id !== session.id) {
+    return NextResponse.json({ error: "You can only edit your own messages." }, { status: 403 });
+  }
+
+  // Record the previous version in the audit log
+  await supabaseAdmin.from("message_edits").insert({
+    message_id: msgId,
+    source:     "channel",
+    old_body:   m.body,
+    new_body:   newBody,
+    edited_by:  session.id,
+  });
+
+  const { data: updated, error } = await supabaseAdmin
+    .from("messages")
+    .update({ body: newBody, edited_at: new Date().toISOString() })
+    .eq("id", msgId)
+    .select("id, channel_id, user_id, body, type, created_at, edited_at")
+    .single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json(updated);
 }
 
 // ── DELETE ─────────────────────────────────────────────────────

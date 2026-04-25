@@ -1,12 +1,15 @@
 // app/api/chat/dm/route.ts
-// GET  /api/chat/dm?with=userId  — fetch DM thread between current user and target
-// POST /api/chat/dm              — send a DM
-// GET  /api/chat/dm/conversations — list all DM conversations (via ?conversations=1)
+// GET    /api/chat/dm?with=userId  — fetch DM thread between current user and target
+// POST   /api/chat/dm              — send a DM
+// PATCH  /api/chat/dm              — edit own DM (sender only)
+// DELETE /api/chat/dm?id=uuid      — delete own DM (sender only)
+// GET    /api/chat/dm?conversations=1 — list all DM conversations
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession }                from "@/lib/auth";
 import { supabaseAdmin }             from "@/lib/supabase/server";
 import { SendDMSchema }              from "@/lib/validations/chat";
+import { z }                         from "zod";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -125,6 +128,55 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(data);
 }
 
+export async function PATCH(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  let raw: unknown;
+  try { raw = await req.json(); }
+  catch { return NextResponse.json({ error: "Invalid body." }, { status: 400 }); }
+
+  const parsed = z.object({
+    id:   z.string().uuid("Invalid message id."),
+    text: z.string().min(1).max(4000),
+  }).safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid payload." }, { status: 400 });
+  }
+  const { id: msgId, text: newBody } = parsed.data;
+
+  const { data: msg } = await supabaseAdmin
+    .from("direct_messages")
+    .select("id, from_user_id, body")
+    .eq("id", msgId)
+    .single();
+
+  const m = msg as { id: string; from_user_id: string; body: string } | null;
+  if (!m) return NextResponse.json({ error: "Message not found." }, { status: 404 });
+  if (m.from_user_id !== session.id) {
+    return NextResponse.json({ error: "You can only edit your own messages." }, { status: 403 });
+  }
+
+  await supabaseAdmin.from("message_edits").insert({
+    message_id: msgId,
+    source:     "dm",
+    old_body:   m.body,
+    new_body:   newBody,
+    edited_by:  session.id,
+  });
+
+  const { data: updated, error } = await supabaseAdmin
+    .from("direct_messages")
+    .update({ body: newBody, edited_at: new Date().toISOString() })
+    .eq("id", msgId)
+    .select("id, from_user_id, to_user_id, from_handle, to_handle, body, read, created_at, edited_at")
+    .single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json(updated);
+}
+
 export async function DELETE(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -132,7 +184,6 @@ export async function DELETE(req: NextRequest) {
   const msgId = req.nextUrl.searchParams.get("id");
   if (!msgId) return NextResponse.json({ error: "id param required" }, { status: 400 });
 
-  // Only sender can delete their own DM
   const { data: msg } = await supabaseAdmin
     .from("direct_messages")
     .select("from_user_id")
