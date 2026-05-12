@@ -19,6 +19,7 @@ import UsersLoading    from "@/app/system/users/loading";
 import ChatLoading     from "@/app/system/chat/loading";
 import InboxLoading    from "@/app/system/inbox/loading";
 import RolesLoading    from "@/app/system/roles/loading";
+import AuditLoading    from "@/app/system/audit/loading";
 import OverviewLoading from "@/app/system/overview/loading";
 import ProfileLoading  from "@/app/system/profile/loading";
 
@@ -28,6 +29,7 @@ import ChatPage     from "@/app/system/chat/page";
 import InboxPage    from "@/app/system/inbox/page";
 import UsersPage    from "@/app/system/users/page";
 import RolesPage    from "@/app/system/roles/page";
+import AuditPage    from "@/app/system/audit/page";
 import ProfilePage  from "@/app/system/profile/page";
 
 function LoadingSkeleton({ view }: { view: string }) {
@@ -36,6 +38,7 @@ function LoadingSkeleton({ view }: { view: string }) {
     case "inbox":   return <InboxLoading />;
     case "users":   return <UsersLoading />;
     case "roles":   return <RolesLoading />;
+    case "audit":   return <AuditLoading />;
     case "profile": return <ProfileLoading />;
     default:        return <OverviewLoading />;
   }
@@ -49,7 +52,10 @@ export function SystemContent() {
   // Start with false on both server and client to avoid hydration mismatch.
   // sessionStorage is client-only, so any cache reads must happen after mount.
   const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    const id = window.setTimeout(() => setMounted(true), 0);
+    return () => window.clearTimeout(id);
+  }, []);
 
   // Before mount: render the skeleton that matches the active view.
   // The server renders this same skeleton, so SSR HTML matches client.
@@ -58,6 +64,7 @@ export function SystemContent() {
   // Client-side permission guard — mirrors the server-side layout guards
   const effectiveView =
     (view === "roles" && !isFounder(flags) && !canManageRoles(flags) && !canManagePermissions(flags)) ? "overview" :
+    (view === "audit" && !isFounder(flags)) ? "overview" :
     (view === "inbox" && !canViewInbox(flags)) ? "overview" :
     view;
 
@@ -66,6 +73,7 @@ export function SystemContent() {
     case "inbox":   return <InboxPage />;
     case "users":   return <UsersPage />;
     case "roles":   return <RolesPage />;
+    case "audit":   return <AuditPage />;
     case "profile": return <ProfilePage />;
     default:        return <OverviewPage />;
   }

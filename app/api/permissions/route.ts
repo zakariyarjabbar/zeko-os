@@ -9,6 +9,7 @@ import { getEffectivePermissions } from "@/lib/effective-flags";
 import { canManagePermissions, isFounder } from "@/lib/permissions";
 import { asUserId } from "@/lib/types/ids";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { logSecurityAuditEvent } from "@/lib/audit";
 
 export async function GET() {
   const session = await getSession();
@@ -55,6 +56,22 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  await logSecurityAuditEvent({
+    req,
+    actor: session,
+    action: "permission.create",
+    targetType: "permission",
+    targetId: data.id as string,
+    targetSnapshot: {
+      id: data.id as string,
+      label: data.name as string,
+      name: data.name as string,
+    },
+    metadata: {
+      name: data.name,
+    },
+  });
 
   return NextResponse.json(data);
 }

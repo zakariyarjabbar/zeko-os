@@ -15,6 +15,7 @@ import { getEffectivePermissions }           from "@/lib/effective-flags";
 import { asUserId }                          from "@/lib/types/ids";
 import { SendChannelMessageSchema }          from "@/lib/validations/chat";
 import { isChannelsManager, canDeleteChannelMessage } from "@/lib/permissions";
+import { logSecurityAuditEvent }             from "@/lib/audit";
 import { z }                                 from "zod";
 
 // ── Shared helpers ─────────────────────────────────────────────
@@ -212,13 +213,20 @@ export async function DELETE(req: NextRequest) {
 
   const { data: msg } = await supabaseAdmin
     .from("messages")
-    .select("id, channel_id, user_id")
+    .select("id, channel_id, user_id, body, type, created_at")
     .eq("id", msgId)
     .single();
 
   if (!msg) return NextResponse.json({ error: "Message not found." }, { status: 404 });
 
-  const m     = msg as { id: string; channel_id: string; user_id: string };
+  const m = msg as {
+    id: string;
+    channel_id: string;
+    user_id: string;
+    body: string | null;
+    type: string | null;
+    created_at: string | null;
+  };
   const { ids, flags } = await getEffectivePermissions(asUserId(session.id));
   const isOwn = m.user_id === session.id;
 
@@ -228,6 +236,29 @@ export async function DELETE(req: NextRequest) {
 
   const { error } = await supabaseAdmin.from("messages").delete().eq("id", msgId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await logSecurityAuditEvent({
+    req,
+    actor: session,
+    action: "message.delete",
+    targetType: "message",
+    targetId: msgId,
+    severity: isOwn ? "low" : "medium",
+    metadata: {
+      channelId: m.channel_id,
+      ownerUserId: m.user_id,
+      isOwn,
+      type: m.type,
+      bodyPreview: (m.body ?? "").slice(0, 120),
+    },
+    targetSnapshot: {
+      id: msgId,
+      label: `message:${msgId}`,
+      channelId: m.channel_id,
+      ownerUserId: m.user_id,
+    },
+    diff: { deleted: { before: true, after: false } },
+  });
 
   return NextResponse.json({ ok: true });
 }

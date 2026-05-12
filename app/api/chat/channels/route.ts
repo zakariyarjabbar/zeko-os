@@ -12,6 +12,7 @@ import { asUserId }                from "@/lib/types/ids";
 import { channelPerm }             from "@/lib/types/permission";
 import { isChannelsManager, isFounder } from "@/lib/permissions";
 import { PERM }                    from "@/lib/permission-ids";
+import { logSecurityAuditEvent, type SecurityAuditDiff } from "@/lib/audit";
 
 const ONLINE_THRESHOLD_MS = 60 * 1000;
 
@@ -152,6 +153,16 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  await logSecurityAuditEvent({
+    req,
+    actor: session,
+    action: "channel.create",
+    targetType: "channel",
+    targetId: id,
+    metadata: { label, topic, isPublic, viewPermission, deletePermission },
+    targetSnapshot: { id, label, name: label, subject: topic || null },
+  });
+
   return NextResponse.json({ id, label, topic, isPublic, viewPermission, deletePermission }, { status: 201 });
 }
 
@@ -177,12 +188,44 @@ export async function PATCH(req: NextRequest) {
   if (topic.length > 256)
     return NextResponse.json({ error: "Topic too long (max 256 chars)" }, { status: 400 });
 
+  const { data: beforeChannel } = await supabaseAdmin
+    .from("channels")
+    .select("id, label, topic, public, view_permission, delete_permission")
+    .eq("id", id)
+    .maybeSingle();
+
   const { error } = await supabaseAdmin
     .from("channels")
     .update({ label, topic, public: isPublic, view_permission: viewPermission, delete_permission: deletePermission })
     .eq("id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const before = beforeChannel as {
+    id: string;
+    label: string | null;
+    topic: string | null;
+    public: boolean | null;
+    view_permission: string | null;
+    delete_permission: string | null;
+  } | null;
+  const diff: SecurityAuditDiff = {};
+  if ((before?.label ?? null) !== label) diff.label = { before: before?.label ?? null, after: label };
+  if ((before?.topic ?? "") !== topic) diff.topic = { before: before?.topic ?? "", after: topic };
+  if ((before?.public ?? false) !== isPublic) diff.isPublic = { before: before?.public ?? false, after: isPublic };
+  if ((before?.view_permission ?? null) !== viewPermission) diff.viewPermission = { before: before?.view_permission ?? null, after: viewPermission };
+  if ((before?.delete_permission ?? null) !== deletePermission) diff.deletePermission = { before: before?.delete_permission ?? null, after: deletePermission };
+
+  await logSecurityAuditEvent({
+    req,
+    actor: session,
+    action: "channel.update",
+    targetType: "channel",
+    targetId: id,
+    metadata: { label, topic, isPublic, viewPermission, deletePermission },
+    targetSnapshot: { id, label, name: label, subject: topic || null },
+    diff,
+  });
 
   return NextResponse.json({ id, label, topic, isPublic, viewPermission, deletePermission });
 }
@@ -213,6 +256,12 @@ export async function DELETE(req: NextRequest) {
 
   void userPermIds; // not needed here but kept for consistency
 
+  const { data: beforeChannel } = await supabaseAdmin
+    .from("channels")
+    .select("id, label, topic, public, view_permission, delete_permission")
+    .eq("id", id)
+    .maybeSingle();
+
   await Promise.all([
     supabaseAdmin.from("messages").delete().eq("channel_id", id),
     supabaseAdmin.from("channel_permissions").delete().eq("channel_id", id),
@@ -228,6 +277,33 @@ export async function DELETE(req: NextRequest) {
 
   const { error } = await supabaseAdmin.from("channels").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const before = beforeChannel as {
+    id: string;
+    label: string | null;
+    topic: string | null;
+    public: boolean | null;
+    view_permission: string | null;
+    delete_permission: string | null;
+  } | null;
+  await logSecurityAuditEvent({
+    req,
+    actor: session,
+    action: "channel.delete",
+    targetType: "channel",
+    targetId: id,
+    metadata: {
+      scopedPermissionIds: scopedIds,
+      scopedPermissionNames: scopedNames,
+    },
+    targetSnapshot: {
+      id,
+      label: before?.label ?? id,
+      name: before?.label ?? null,
+      subject: before?.topic ?? null,
+    },
+    diff: { deleted: { before: true, after: false } },
+  });
 
   return NextResponse.json({ deleted: id });
 }

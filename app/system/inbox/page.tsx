@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Mail, MailOpen, Trash2, Send, RefreshCw,
-  ChevronLeft, AlertCircle, CheckCircle2, Inbox,
+  AlertCircle, CheckCircle2, Inbox,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProfile } from "@/components/system/SessionContext";
@@ -171,6 +171,7 @@ export default function InboxPage() {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({
+        messageId:     selected.id,
         to:           selected.email,
         subject:      selected.subject,
         replyBody:    replyText.trim(),

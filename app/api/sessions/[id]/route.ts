@@ -13,9 +13,10 @@ import {
   getSessionRowForUser,
   revokeSession,
 } from "@/lib/sessions";
+import { logSecurityAuditEvent } from "@/lib/audit";
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await getSession();
@@ -40,6 +41,16 @@ export async function DELETE(
   }
 
   await revokeSession(targetSid);
+  await logSecurityAuditEvent({
+    req,
+    actor: session,
+    action: "session.revoke",
+    targetType: "session",
+    targetId: targetSid,
+    metadata: {
+      current: targetSid === session.sid,
+    },
+  });
 
   // If the user revoked the device they're currently on, also clear
   // the cookie so the next request re-renders as logged-out instead

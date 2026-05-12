@@ -11,6 +11,7 @@ import { canManagePermissions, isFounder } from "@/lib/permissions";
 const ADMIN_PERMISSION = "Administrator";
 import { asUserId } from "@/lib/types/ids";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { logSecurityAuditEvent, type SecurityAuditDiff, type SecurityAuditSnapshot } from "@/lib/audit";
 
 export async function PATCH(
   req: NextRequest,
@@ -27,6 +28,18 @@ export async function PATCH(
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: "Invalid body." }, { status: 400 }); }
 
+  const { data: beforePermission } = await supabaseAdmin
+    .from("permissions")
+    .select("id, name, description")
+    .eq("id", id)
+    .maybeSingle();
+
+  const before = beforePermission as {
+    id: string;
+    name: string | null;
+    description: string | null;
+  } | null;
+
   const update: Record<string, string> = {};
   if (body.name        !== undefined) update.name        = body.name.trim();
   if (body.description !== undefined) update.description = body.description.trim();
@@ -42,11 +55,31 @@ export async function PATCH(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  const diff: SecurityAuditDiff = {};
+  if (body.name !== undefined) {
+    diff.name = { before: before?.name ?? null, after: body.name.trim() };
+  }
+  if (body.description !== undefined) {
+    diff.description = { before: before?.description ?? null, after: body.description.trim() };
+  }
+
+  await logSecurityAuditEvent({
+    req,
+    actor: session,
+    action: "permission.update",
+    targetType: "permission",
+    targetId: id,
+    diff,
+    metadata: {
+      changedFields: Object.keys(update),
+    },
+  });
+
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getSession();
@@ -68,12 +101,32 @@ export async function DELETE(
     return NextResponse.json({ error: "Administrator permission cannot be deleted." }, { status: 400 });
   }
 
+  const targetSnapshot = data
+    ? {
+        id,
+        label: (data as { name?: string | null }).name ?? id,
+        name: (data as { name?: string | null }).name ?? null,
+      } satisfies SecurityAuditSnapshot
+    : { id, label: id } satisfies SecurityAuditSnapshot;
+
   const { error } = await supabaseAdmin
     .from("permissions")
     .delete()
     .eq("id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await logSecurityAuditEvent({
+    req,
+    actor: session,
+    action: "permission.delete",
+    targetType: "permission",
+    targetId: id,
+    targetSnapshot,
+    metadata: {
+      name: (data as { name: string } | null)?.name,
+    },
+  });
 
   return NextResponse.json({ ok: true });
 }

@@ -10,6 +10,7 @@ import { supabaseAdmin }             from "@/lib/supabase/server";
 import { getEffectivePermissions }    from "@/lib/effective-flags";
 import { asUserId }                  from "@/lib/types/ids";
 import { revokeAllOthersForUser }    from "@/lib/sessions";
+import { logSecurityAuditEvent, type SecurityAuditDiff } from "@/lib/audit";
 
 function anonClient() {
   return createClient(
@@ -67,6 +68,19 @@ export async function PATCH(req: NextRequest) {
     // "password updated" without kicking them out of the tab they're on.
     await revokeAllOthersForUser(session.id, session.sid);
 
+    await logSecurityAuditEvent({
+      req,
+      actor: session,
+      action: "profile.password_change",
+      targetType: "user",
+      targetId: session.id,
+      severity: "high",
+      diff: {
+        password: { before: "set", after: "changed" },
+        otherSessions: { before: "active", after: "revoked" },
+      },
+    });
+
     return NextResponse.json({ ok: true });
   }
 
@@ -111,11 +125,46 @@ export async function PATCH(req: NextRequest) {
   if (Object.keys(profileUpdate).length === 0)
     return NextResponse.json({ error: "No valid fields to update." }, { status: 400 });
 
+  const { data: beforeProfile } = await supabaseAdmin
+    .from("profiles")
+    .select("id, display_id, display_name, username")
+    .eq("id", session.id)
+    .maybeSingle();
+
   const { error } = await supabaseAdmin
     .from("profiles")
     .update(profileUpdate)
     .eq("id", session.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const diff: SecurityAuditDiff = {};
+  const before = beforeProfile as {
+    id: string;
+    display_id: number | null;
+    display_name: string | null;
+    username: string | null;
+  } | null;
+  if (Object.hasOwn(profileUpdate, "display_name")) {
+    diff.displayName = {
+      before: before?.display_name ?? null,
+      after: profileUpdate.display_name,
+    };
+  }
+  if (Object.hasOwn(profileUpdate, "username")) {
+    diff.username = {
+      before: before?.username ?? null,
+      after: profileUpdate.username,
+    };
+  }
+
+  await logSecurityAuditEvent({
+    req,
+    actor: session,
+    action: "profile.update",
+    targetType: "user",
+    targetId: session.id,
+    diff,
+  });
 
   // (No cookie re-issue needed: display_name is resolved fresh from the
   // profiles table on every getSession() call — the cookie holds only

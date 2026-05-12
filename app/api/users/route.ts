@@ -4,22 +4,34 @@
 //
 // display_id is assigned automatically by the DB sequence — never passed from the client.
 
-import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { NextRequest } from "next/server";
 import { getEffectivePermissions } from "@/lib/effective-flags";
 import { asUserId } from "@/lib/types/ids";
 import { canCreateUsers, canViewUserPermissions } from "@/lib/permissions";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import {
+  apiOk,
+  badRequest,
+  conflict,
+  forbidden,
+  internalError,
+  requireSession,
+} from "@/lib/api";
+import { logSecurityAuditEvent } from "@/lib/audit";
 
-export async function GET() {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function GET(req: NextRequest) {
+  const auth = await requireSession(req);
+  if (!auth.ok) return auth.response;
+  const { session } = auth;
 
   const { ids }     = await getEffectivePermissions(asUserId(session.id));
   const canViewPerms = canViewUserPermissions(ids);
 
   const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers();
-  if (authError) return NextResponse.json({ error: authError.message }, { status: 500 });
+  if (authError) {
+    console.error("[users/list] auth admin error:", authError.message);
+    return internalError(req);
+  }
 
   const { data: profiles } = await supabaseAdmin
     .from("profiles")
@@ -60,16 +72,17 @@ export async function GET() {
     };
   });
 
-  return NextResponse.json(users);
+  return apiOk(users);
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireSession(req);
+  if (!auth.ok) return auth.response;
+  const { session } = auth;
 
   const { ids } = await getEffectivePermissions(asUserId(session.id));
   if (!canCreateUsers(ids)) {
-    return NextResponse.json({ error: "Forbidden. permission-manager or Administrator required." }, { status: 403 });
+    return forbidden("Forbidden. permission-manager or Administrator required.", req);
   }
 
   let body: {
@@ -83,23 +96,20 @@ export async function POST(req: NextRequest) {
   };
 
   try { body = await req.json(); }
-  catch { return NextResponse.json({ error: "Invalid body." }, { status: 400 }); }
+  catch { return badRequest("Invalid body.", req); }
 
   const { email, password, username, displayName, role, accessFlags, roleIds } = body;
 
   if (!email?.trim() || !password || !username?.trim()) {
-    return NextResponse.json(
-      { error: "email, password, and username are required." },
-      { status: 400 },
-    );
+    return badRequest("email, password, and username are required.", req);
   }
   if (password.length < 8) {
-    return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
+    return badRequest("Password must be at least 8 characters.", req);
   }
 
   const cleanDisplayName = (displayName ?? "").trim();
   if (cleanDisplayName && (cleanDisplayName.match(/ /g) ?? []).length > 1) {
-    return NextResponse.json({ error: "Display name may contain at most one space." }, { status: 400 });
+    return badRequest("Display name may contain at most one space.", req);
   }
 
   const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -109,7 +119,10 @@ export async function POST(req: NextRequest) {
     user_metadata: { name: cleanDisplayName || username.trim(), role: role ?? "user" },
   });
 
-  if (authError) return NextResponse.json({ error: authError.message }, { status: 400 });
+  if (authError) {
+    console.error("[users/create] auth admin error:", authError.message);
+    return badRequest("Unable to create user with the supplied credentials.", req);
+  }
 
   const userId = authData.user.id;
 
@@ -127,7 +140,11 @@ export async function POST(req: NextRequest) {
 
   if (profileError) {
     await supabaseAdmin.auth.admin.deleteUser(userId);
-    return NextResponse.json({ error: profileError.message }, { status: 500 });
+    console.error("[users/create] profile insert error:", profileError.message);
+    if (profileError.code === "23505") {
+      return conflict("Username is already taken.", req);
+    }
+    return internalError(req);
   }
 
   if (roleIds && roleIds.length > 0) {
@@ -136,5 +153,26 @@ export async function POST(req: NextRequest) {
       .insert(roleIds.map((rid) => ({ user_id: userId, role_id: rid })));
   }
 
-  return NextResponse.json({ ok: true, id: userId });
+  await logSecurityAuditEvent({
+    req,
+    actor: session,
+    action: "user.create",
+    targetType: "user",
+    targetId: userId,
+    targetSnapshot: {
+      id: userId,
+      label: cleanDisplayName || `@${username.trim()}`,
+      username: username.trim(),
+      displayName: cleanDisplayName || null,
+      email: email.trim().toLowerCase(),
+    },
+    metadata: {
+      email: email.trim().toLowerCase(),
+      username: username.trim(),
+      accessFlagsCount: accessFlags?.length ?? 0,
+      roleIdsCount: roleIds?.length ?? 0,
+    },
+  });
+
+  return apiOk({ ok: true, id: userId }, { status: 201 });
 }

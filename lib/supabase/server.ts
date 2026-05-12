@@ -2,6 +2,7 @@
 // Server-side Supabase client — uses the service role key.
 // NEVER import this in client components — it bypasses RLS.
 
+import "server-only";
 import { createClient } from "@supabase/supabase-js";
 
 const url         = process.env.NEXT_PUBLIC_SUPABASE_URL!;

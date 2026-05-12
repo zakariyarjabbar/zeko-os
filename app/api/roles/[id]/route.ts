@@ -10,6 +10,7 @@ import { getEffectivePermissions } from "@/lib/effective-flags";
 import { canManageRoles, isFounder } from "@/lib/permissions";
 import { asUserId } from "@/lib/types/ids";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { logSecurityAuditEvent, type SecurityAuditDiff, type SecurityAuditSnapshot } from "@/lib/audit";
 
 export async function GET(
   _req: NextRequest,
@@ -78,6 +79,19 @@ export async function PATCH(
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: "Invalid body." }, { status: 400 }); }
 
+  const { data: beforeRole } = await supabaseAdmin
+    .from("roles")
+    .select("id, name, description, permissions")
+    .eq("id", id)
+    .maybeSingle();
+
+  const before = beforeRole as {
+    id: string;
+    name: string | null;
+    description: string | null;
+    permissions: string[] | null;
+  } | null;
+
   const update: Record<string, unknown> = {};
   if (body.name        !== undefined) update.name        = body.name.trim();
   if (body.description !== undefined) update.description = body.description.trim();
@@ -94,11 +108,35 @@ export async function PATCH(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  const diff: SecurityAuditDiff = {};
+  if (body.name !== undefined) {
+    diff.name = { before: before?.name ?? null, after: body.name.trim() };
+  }
+  if (body.description !== undefined) {
+    diff.description = { before: before?.description ?? null, after: body.description.trim() };
+  }
+  if (body.permissions !== undefined) {
+    diff.permissions = { before: before?.permissions ?? [], after: body.permissions };
+  }
+
+  await logSecurityAuditEvent({
+    req,
+    actor: session,
+    action: "role.update",
+    targetType: "role",
+    targetId: id,
+    diff,
+    metadata: {
+      changedFields: Object.keys(update),
+      permissionsCount: body.permissions?.length,
+    },
+  });
+
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getSession();
@@ -109,10 +147,32 @@ export async function DELETE(
 
   const { id } = await params;
 
+  const { data: beforeRole } = await supabaseAdmin
+    .from("roles")
+    .select("id, name")
+    .eq("id", id)
+    .maybeSingle();
+  const targetSnapshot = beforeRole
+    ? {
+        id,
+        label: (beforeRole as { name?: string | null }).name ?? id,
+        name: (beforeRole as { name?: string | null }).name ?? null,
+      } satisfies SecurityAuditSnapshot
+    : { id, label: id } satisfies SecurityAuditSnapshot;
+
   await supabaseAdmin.from("user_roles").delete().eq("role_id", id);
 
   const { error } = await supabaseAdmin.from("roles").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await logSecurityAuditEvent({
+    req,
+    actor: session,
+    action: "role.delete",
+    targetType: "role",
+    targetId: id,
+    targetSnapshot,
+  });
 
   return NextResponse.json({ ok: true });
 }

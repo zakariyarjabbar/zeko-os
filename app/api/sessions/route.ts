@@ -14,6 +14,7 @@ import {
   revokeAllOthersForUser,
 } from "@/lib/sessions";
 import { formatDeviceLabel } from "@/lib/user-agent";
+import { logSecurityAuditEvent } from "@/lib/audit";
 
 // ── Serializer ──────────────────────────────────────────────────
 // Only ship safe, display-ready fields to the client. The raw UA
@@ -68,5 +69,12 @@ export async function DELETE(req: NextRequest) {
   }
 
   await revokeAllOthersForUser(session.id, session.sid);
+  await logSecurityAuditEvent({
+    req,
+    actor: session,
+    action: "session.revoke_others",
+    targetType: "session",
+    targetId: session.sid,
+  });
   return NextResponse.json({ ok: true });
 }
