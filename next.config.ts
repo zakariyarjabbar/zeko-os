@@ -42,10 +42,18 @@ const nextConfig: NextConfig = {
               "img-src 'self' data: blob: https://*.githubusercontent.com",
               "font-src 'self' data:",
               "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+              "object-src 'none'",
+              "worker-src 'self' blob:",
+              "manifest-src 'self'",
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",
+              ...(isDev ? [] : ["upgrade-insecure-requests"]),
             ].join("; "),
+          },
+          {
+            key: "X-Frame-Options",
+            value: "DENY",
           },
           {
             key: "Strict-Transport-Security",

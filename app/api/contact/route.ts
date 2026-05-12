@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { enforcePersistentRateLimit } from "@/lib/rate-limit";
 import { z } from "zod";
 
 const ContactSchema = z.object({
@@ -14,6 +15,14 @@ const ContactSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const limited = await enforcePersistentRateLimit({
+    req,
+    scope: "contact:post",
+    limit: 10,
+    windowSeconds: 900,
+  });
+  if (limited) return limited;
+
   let body: unknown;
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: "Invalid body." }, { status: 400 }); }

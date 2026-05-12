@@ -8,15 +8,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession }                from "@/lib/auth";
 import { supabaseAdmin }             from "@/lib/supabase/server";
+import { z }                         from "zod";
+
+const MessageIdSchema = z.string().uuid("Invalid message id.");
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const messageId = req.nextUrl.searchParams.get("messageId");
-  if (!messageId) {
-    return NextResponse.json({ error: "messageId param required" }, { status: 400 });
-  }
+  const parsed = MessageIdSchema.safeParse(req.nextUrl.searchParams.get("messageId") ?? "");
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid message id." }, { status: 400 });
+  const messageId = parsed.data;
 
   const { data, error } = await supabaseAdmin
     .from("message_edits")

@@ -6,13 +6,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { enforcePersistentRateLimit } from "@/lib/rate-limit";
+import { z } from "zod";
+
+const SearchQuerySchema = z.string().trim().toLowerCase().min(1).max(40);
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const q = req.nextUrl.searchParams.get("q")?.trim().toLowerCase() ?? "";
-  if (q.length < 1) return NextResponse.json([]);
+  const limited = await enforcePersistentRateLimit({
+    req,
+    scope: "chat:users_search",
+    limit: 120,
+    windowSeconds: 900,
+    identifier: session.id,
+  });
+  if (limited) return limited;
+
+  const parsed = SearchQuerySchema.safeParse(req.nextUrl.searchParams.get("q") ?? "");
+  if (!parsed.success) return NextResponse.json([]);
+  const q = parsed.data;
 
   // Search profiles by username
   const { data: profiles } = await supabaseAdmin

@@ -6,15 +6,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession }    from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { PERM }          from "@/lib/permission-ids";
+import { z }             from "zod";
 
 const ONLINE_THRESHOLD_MS = 60 * 1000;
+const ChannelIdSchema = z.string().min(1).max(120).regex(/^[a-z0-9-]+$/);
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const channelId = req.nextUrl.searchParams.get("channel");
-  if (!channelId) return NextResponse.json({ error: "Missing channel" }, { status: 400 });
+  const parsedChannel = ChannelIdSchema.safeParse(req.nextUrl.searchParams.get("channel") ?? "");
+  if (!parsedChannel.success) return NextResponse.json({ error: "Invalid channel." }, { status: 400 });
+  const channelId = parsedChannel.data;
 
   const since = new Date(Date.now() - ONLINE_THRESHOLD_MS).toISOString();
 

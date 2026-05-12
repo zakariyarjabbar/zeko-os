@@ -11,6 +11,9 @@ import { supabaseAdmin }             from "@/lib/supabase/server";
 import { SendDMSchema }              from "@/lib/validations/chat";
 import { z }                         from "zod";
 
+const UserIdSchema = z.string().uuid("Invalid user id.");
+const MessageIdSchema = z.string().uuid("Invalid message id.");
+
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -54,8 +57,11 @@ export async function GET(req: NextRequest) {
   }
 
   // Fetch DM thread with a specific user
-  const withUser = req.nextUrl.searchParams.get("with");
-  if (!withUser) return NextResponse.json({ error: "with param required" }, { status: 400 });
+  const parsedWithUser = UserIdSchema.safeParse(req.nextUrl.searchParams.get("with") ?? "");
+  if (!parsedWithUser.success) {
+    return NextResponse.json({ error: parsedWithUser.error.issues[0]?.message ?? "Invalid user id." }, { status: 400 });
+  }
+  const withUser = parsedWithUser.data;
 
   const { data, error } = await supabaseAdmin
     .from("direct_messages")
@@ -181,8 +187,11 @@ export async function DELETE(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const msgId = req.nextUrl.searchParams.get("id");
-  if (!msgId) return NextResponse.json({ error: "id param required" }, { status: 400 });
+  const parsedMsgId = MessageIdSchema.safeParse(req.nextUrl.searchParams.get("id") ?? "");
+  if (!parsedMsgId.success) {
+    return NextResponse.json({ error: parsedMsgId.error.issues[0]?.message ?? "Invalid message id." }, { status: 400 });
+  }
+  const msgId = parsedMsgId.data;
 
   const { data: msg } = await supabaseAdmin
     .from("direct_messages")

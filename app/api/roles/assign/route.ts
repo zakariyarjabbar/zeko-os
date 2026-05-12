@@ -6,7 +6,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireFounder } from "@/lib/require-founder";
+import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { logSecurityAuditEvent, type SecurityAuditDiff } from "@/lib/audit";
 import { z } from "zod";
 
 const AssignRolesSchema = z.object({
@@ -31,6 +33,15 @@ export async function POST(req: NextRequest) {
   }
   const { userId, roleIds: ids } = parsed.data;
 
+  const { data: beforeRows } = await supabaseAdmin
+    .from("user_roles")
+    .select("role_id")
+    .eq("user_id", userId);
+  const beforeRoleIds = (beforeRows ?? [])
+    .map((row: { role_id: string }) => row.role_id)
+    .sort();
+  const afterRoleIds = [...ids].sort();
+
   // Delete all existing assignments for this user
   const { error: delError } = await supabaseAdmin
     .from("user_roles")
@@ -47,6 +58,24 @@ export async function POST(req: NextRequest) {
       .insert(rows);
 
     if (insError) return NextResponse.json({ error: insError.message }, { status: 500 });
+  }
+
+  const actor = await getSession();
+  const diff: SecurityAuditDiff = {};
+  if (beforeRoleIds.join(",") !== afterRoleIds.join(",")) {
+    diff.roleIds = { before: beforeRoleIds, after: afterRoleIds };
+  }
+  if (actor) {
+    await logSecurityAuditEvent({
+      req,
+      actor,
+      action: "user.update",
+      targetType: "user",
+      targetId: userId,
+      severity: "high",
+      metadata: { source: "roles.assign" },
+      diff,
+    });
   }
 
   return NextResponse.json({ ok: true });

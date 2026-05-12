@@ -7,6 +7,7 @@ import { getEffectivePermissions } from "@/lib/effective-flags";
 import { canManageInbox } from "@/lib/permissions";
 import { asUserId } from "@/lib/types/ids";
 import { logSecurityAuditEvent } from "@/lib/audit";
+import { enforcePersistentRateLimit } from "@/lib/rate-limit";
 import { z } from "zod";
 
 const InboxReplySchema = z.object({
@@ -34,6 +35,15 @@ export async function POST(req: NextRequest) {
   if (!canManageInbox(ids)) {
     return NextResponse.json({ error: "Forbidden. inbox-manager permission required." }, { status: 403 });
   }
+
+  const limited = await enforcePersistentRateLimit({
+    req,
+    scope: "inbox:reply",
+    limit: 30,
+    windowSeconds: 3600,
+    identifier: session.id,
+  });
+  if (limited) return limited;
 
   let body: unknown;
   try { body = await req.json(); }

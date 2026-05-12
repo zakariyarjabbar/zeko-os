@@ -6,10 +6,19 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { enforcePersistentRateLimit } from "@/lib/rate-limit";
 
 const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{1,18}[a-z0-9]$/;
 
 export async function GET(req: NextRequest) {
+  const limited = await enforcePersistentRateLimit({
+    req,
+    scope: "auth:username_available",
+    limit: 120,
+    windowSeconds: 900,
+  });
+  if (limited) return limited;
+
   const raw = (req.nextUrl.searchParams.get("username") ?? "")
     .trim()
     .toLowerCase();

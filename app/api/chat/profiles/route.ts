@@ -6,13 +6,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession }                from "@/lib/auth";
 import { supabaseAdmin }             from "@/lib/supabase/server";
+import { z }                         from "zod";
+
+const IdsSchema = z.array(z.string().uuid()).max(100);
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const raw = req.nextUrl.searchParams.get("ids") ?? "";
-  const ids = raw.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 100);
+  const parsed = IdsSchema.safeParse(raw.split(",").map((s) => s.trim()).filter(Boolean));
+  if (!parsed.success) return NextResponse.json({ error: "Invalid ids." }, { status: 400 });
+  const ids = parsed.data;
 
   if (ids.length === 0) return NextResponse.json({});
 
