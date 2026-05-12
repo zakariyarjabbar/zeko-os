@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useState, useEffect, useRef, useCallback, memo } from "react";
+import { useState, useEffect, useRef, memo } from "react";
 import { Activity, Cpu, HardDrive, Wifi } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -200,9 +200,12 @@ function LiveClock() {
         minute:  "2-digit",
         second:  "2-digit",
       });
-    setTime(fmt());
+    const first = setTimeout(() => setTime(fmt()), 0);
     const iv = setInterval(() => setTime(fmt()), 1000);
-    return () => clearInterval(iv);
+    return () => {
+      clearTimeout(first);
+      clearInterval(iv);
+    };
   }, []);
 
   return (
@@ -268,7 +271,7 @@ export function LiveMonitor() {
 
         {/* ── Section header ──────────────────────────────── */}
         <div className="mb-12 text-center">
-          <p className="section-label mb-3">// SYSTEM_VITALS</p>
+          <p className="section-label mb-3">{"// SYSTEM_VITALS"}</p>
           <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-zk-white leading-tight mb-4">
             Live{" "}
             <span className="font-mono text-zk-green text-glow-sm">Monitor</span>

@@ -973,7 +973,9 @@ export default function IAMPage() {
     // Hydrate from sessionStorage → seed instantly
     getAppCache().hydrate();
     const cached = getAppCache().getPermissions() as Permission[] | null;
-    if (cached) { setPerms(cached); setPermsLoaded(true); }
+    const seedId = setTimeout(() => {
+      if (cached) { setPerms(cached); setPermsLoaded(true); }
+    }, 0);
     // Always revalidate on mount
     fetch("/api/permissions")
       .then((r) => r.ok ? r.json() : [])
@@ -982,6 +984,7 @@ export default function IAMPage() {
         setPerms(data);
         setPermsLoaded(true);
       });
+    return () => clearTimeout(seedId);
   }, []);
 
   const tabs: { id: ActiveTab; label: string; icon: React.ElementType }[] = [

@@ -147,7 +147,7 @@ export function CodeShowcase() {
 
           {/* ── Left: Text Content ──────────────────────── */}
           <div>
-            <p className="section-label mb-3">// BUILT_BY_ENGINEERS</p>
+            <p className="section-label mb-3">{"// BUILT_BY_ENGINEERS"}</p>
             <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-zk-white leading-tight mb-6">
               Code that ships.{" "}
               <span className="font-mono text-zk-green text-glow-sm block mt-1">

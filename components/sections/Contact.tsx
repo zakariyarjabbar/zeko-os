@@ -120,7 +120,7 @@ export function Contact() {
 
         {/* ── Section Header ─────────────────────────────── */}
         <div className="mb-16 text-center">
-          <p className="section-label mb-3">// ESTABLISH_CONNECTION</p>
+          <p className="section-label mb-3">{"// ESTABLISH_CONNECTION"}</p>
           <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-zk-white leading-tight mb-4">
             Get in{" "}
             <span className="font-mono text-zk-green text-glow-sm">Touch</span>

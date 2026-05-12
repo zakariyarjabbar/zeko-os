@@ -8,7 +8,7 @@
 "use client";
 
 import {
-  useEffect, useRef, useMemo, useState, useCallback, memo,
+  useEffect, useRef, useMemo, useState, useCallback,
 } from "react";
 import { Trash2, Pencil, Check, CheckCheck, X, Save }
   from "lucide-react";
@@ -203,7 +203,9 @@ function MessageLine({
 
   // Sync editText when msg.text changes externally (e.g. SSE update event)
   useEffect(() => {
-    if (!editing) setEditText(msg.text);
+    if (editing) return;
+    const id = setTimeout(() => setEditText(msg.text), 0);
+    return () => clearTimeout(id);
   }, [msg.text, editing]);
 
   function startEdit() {
@@ -412,7 +414,7 @@ function MessageGroupBlock({
           </span>
         </div>
 
-        {group.messages.map((msg, i) => (
+        {group.messages.map((msg) => (
           <MessageLine
             key={msg.id}
             msg={msg}
@@ -507,24 +509,32 @@ export function MessageLog({
   const bottomRef = useRef<HTMLDivElement>(null);
   const [popover, setPopover] = useState<PopoverState | null>(null);
 
-  const seenIds = useRef<Set<string>>(new Set());
+  const [seenIds, setSeenIds] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
-    seenIds.current = new Set();
+    const id = setTimeout(() => setSeenIds(new Set()), 0);
+    return () => clearTimeout(id);
   }, [conversationKey]);
 
   useEffect(() => {
-    messages.forEach((m) => seenIds.current.add(m.id));
-  });
+    const id = setTimeout(() => {
+      setSeenIds((prev) => {
+        const next = new Set(prev);
+        messages.forEach((m) => next.add(m.id));
+        return next;
+      });
+    }, 0);
+    return () => clearTimeout(id);
+  }, [messages]);
 
   const newIds = useMemo(() => {
     const s = new Set<string>();
     for (const m of messages) {
-      if (!seenIds.current.has(m.id) && !m.id.startsWith("opt-")) s.add(m.id);
+      if (!seenIds.has(m.id) && !m.id.startsWith("opt-")) s.add(m.id);
     }
     return s;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages]);
+   
+  }, [messages, seenIds]);
 
   const items = useMemo(() => {
     type Item =

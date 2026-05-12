@@ -13,7 +13,7 @@ const MarkReadSchema = z.union([
   z.object({ all: z.literal(true) }),
 ]);
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

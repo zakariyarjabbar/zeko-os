@@ -68,10 +68,12 @@ export function KonamiCode() {
   // Stagger line reveals when modal opens
   useEffect(() => {
     if (!open) return;
-    setVisible(0);
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    timers.push(setTimeout(() => setVisible(0), 0));
     LINES.forEach((line, i) => {
-      setTimeout(() => setVisible(i + 1), line.delay + 100);
+      timers.push(setTimeout(() => setVisible(i + 1), line.delay + 100));
     });
+    return () => timers.forEach(clearTimeout);
   }, [open]);
 
   // Close on Escape

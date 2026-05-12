@@ -4,7 +4,7 @@
 
 "use client";
 
-import { useState, useLayoutEffect } from "react";
+import { useState, useEffect } from "react";
 import { Background }         from "@/components/ui/Background";
 import { BootSequence }       from "@/components/ui/BootSequence";
 import { KonamiCode }         from "@/components/ui/KonamiCode";
@@ -22,13 +22,16 @@ export default function HomePage() {
   const [isBooting, setIsBooting] = useState(false);
   const [ready, setReady]         = useState(false);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     // Runs synchronously before first paint.
     // ready=false → black screen on first cycle → no landing page flash.
-    if (!sessionStorage.getItem("zk_booted")) {
-      setIsBooting(true);
-    }
-    setReady(true);
+    const id = window.setTimeout(() => {
+      if (!sessionStorage.getItem("zk_booted")) {
+        setIsBooting(true);
+      }
+      setReady(true);
+    }, 0);
+    return () => window.clearTimeout(id);
   }, []);
 
   function handleBootComplete() {

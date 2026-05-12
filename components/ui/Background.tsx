@@ -95,7 +95,8 @@ function hexPath(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: numbe
     const a = (i / 6) * TAU + rot;
     const x = cx + r * Math.cos(a);
     const y = cy + r * Math.sin(a);
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
   }
   ctx.closePath();
 }
@@ -297,7 +298,8 @@ export function Background() {
         for (let i = 0; i <= steps; i++) {
           const x = (i / steps) * W;
           const y = baseY + band.amplitude * Math.sin(x * band.k + phase);
-          i === 0 ? ctx!.moveTo(x, y) : ctx!.lineTo(x, y);
+          if (i === 0) ctx!.moveTo(x, y);
+          else ctx!.lineTo(x, y);
         }
 
         // Wide soft outer glow

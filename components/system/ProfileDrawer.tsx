@@ -20,10 +20,9 @@ interface ProfileDrawerProps {
 
 // ─── Live session uptime ──────────────────────────────────────
 function useUptime(startMs: number) {
-  const [elapsed, setElapsed] = useState(0);
+  const [elapsed, setElapsed] = useState(() => Math.floor((Date.now() - startMs) / 1000));
 
   useEffect(() => {
-    setElapsed(Math.floor((Date.now() - startMs) / 1000));
     const id = setInterval(
       () => setElapsed(Math.floor((Date.now() - startMs) / 1000)),
       1000

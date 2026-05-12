@@ -29,7 +29,7 @@ const safeText = z.string().transform((s) =>
     // 1. Strip HTML tags (defence against XSS if the body is ever rendered raw)
     .replace(/<[^>]*>/g, "")
     // 2. Remove null bytes and non-printable ASCII control chars (keep \n \r \t)
-    // eslint-disable-next-line no-control-regex
+     
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
     // 3. Remove zero-width and invisible Unicode characters (homoglyph / spoofing)
     .replace(/[\u200B-\u200D\u2028\u2029\u2060\uFEFF]/g, "")

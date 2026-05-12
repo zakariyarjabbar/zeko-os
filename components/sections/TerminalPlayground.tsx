@@ -295,7 +295,7 @@ export function TerminalPlayground() {
       setLines(prev => [...prev, { ...next, id: getId() }]);
     }, 35);
     return () => clearInterval(iv);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, []);
 
   // Auto-scroll to bottom whenever lines change
@@ -370,7 +370,7 @@ export function TerminalPlayground() {
         { kind: "blank", text: "", color: "muted" },
       ]);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, []);
 
   const handleKeyDown = useCallback(
@@ -412,7 +412,7 @@ export function TerminalPlayground() {
 
         {/* ── Section header ──────────────────────────────── */}
         <div className="mb-12 text-center">
-          <p className="section-label mb-3">// SYSTEM_INTERFACE</p>
+          <p className="section-label mb-3">{"// SYSTEM_INTERFACE"}</p>
           <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-zk-white leading-tight mb-4">
             Try the{" "}
             <span className="font-mono text-zk-green text-glow-sm">Shell</span>

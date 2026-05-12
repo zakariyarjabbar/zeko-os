@@ -427,7 +427,7 @@ export default function ProfilePage() {
               {profile.displayName || profile.username}
             </h1>
             <p className="font-mono text-[10px] text-zk-muted/40 tracking-widest mt-0.5">
-              // PROFILE_SETTINGS
+              {"// PROFILE_SETTINGS"}
             </p>
           </div>
         </div>

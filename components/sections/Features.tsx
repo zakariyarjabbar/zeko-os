@@ -12,7 +12,6 @@ import {
   Terminal,
   Cpu,
 } from "lucide-react";
-import { GlassCard } from "@/components/ui/GlassCard";
 import { Badge } from "@/components/ui/Badge";
 
 // ─── Feature Data ────────────────────────────────────────────
@@ -133,7 +132,7 @@ export function Features() {
 
         {/* ── Section Header ─────────────────────────────── */}
         <div className="mb-16 max-w-2xl">
-          <p className="section-label mb-3">// SYSTEM_MODULES</p>
+          <p className="section-label mb-3">{"// SYSTEM_MODULES"}</p>
           <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-zk-white leading-tight mb-4">
             What We{" "}
             <span className="font-mono text-zk-green text-glow-sm">

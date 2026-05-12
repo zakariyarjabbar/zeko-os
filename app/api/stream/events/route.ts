@@ -195,7 +195,7 @@ export async function GET(req: NextRequest) {
       }
 
       // First poll after one full interval — lets the initial page render settle
-      setTimeout(poll, POLL_MS);
+      setTimeout(poll, PRESENCE_POLL_MS);
     },
 
     cancel() {

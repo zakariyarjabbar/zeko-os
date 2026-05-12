@@ -249,9 +249,12 @@ function LiveClock() {
   useEffect(() => {
     const fmt = () =>
       new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    setT(fmt());
+    const first = setTimeout(() => setT(fmt()), 0);
     const id = setInterval(() => setT(fmt()), 1000);
-    return () => clearInterval(id);
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
   }, []);
   return <span className="font-mono text-xs text-zk-green tabular-nums">{t}</span>;
 }

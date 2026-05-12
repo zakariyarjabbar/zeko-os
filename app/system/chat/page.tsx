@@ -726,7 +726,6 @@ export default function ChatPage() {
   // Called from CliInput on every keystroke; debounced here to POST at most
   // once every 3 s (server TTL is 5 s, so this keeps the indicator alive
   // as long as the user is actively typing).
-  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSent = useRef<number>(0);
 
   function handleTyping() {

@@ -291,10 +291,28 @@ function ChannelForm({
 }) {
   const [form, setForm] = useState<ChannelFormState>(initial);
   const labelRef = useRef<HTMLInputElement>(null);
+  const {
+    label: initialLabel,
+    topic: initialTopic,
+    isPublic: initialIsPublic,
+    viewPermission: initialViewPermission,
+    deletePermission: initialDeletePermission,
+  } = initial;
 
   useEffect(() => { setTimeout(() => labelRef.current?.focus(), 50); }, []);
   // Sync if parent changes initial (e.g. switching which channel to edit)
-  useEffect(() => { setForm(initial); }, [initial.label, initial.topic, initial.isPublic, initial.viewPermission, initial.deletePermission]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setForm({
+        label: initialLabel,
+        topic: initialTopic,
+        isPublic: initialIsPublic,
+        viewPermission: initialViewPermission,
+        deletePermission: initialDeletePermission,
+      });
+    }, 0);
+    return () => clearTimeout(id);
+  }, [initialLabel, initialTopic, initialIsPublic, initialViewPermission, initialDeletePermission]);
 
   const set = (k: keyof ChannelFormState, v: string | boolean) =>
     setForm((p) => ({ ...p, [k]: v }));
@@ -414,7 +432,7 @@ function ChannelForm({
 
 // ─── Main component ───────────────────────────────────────────
 export function ChatSidebar({
-  channels, activeChannel, onSelect, dmConvos, activeDmUser, onRefreshDms,
+  channels, activeChannel, onSelect, dmConvos, activeDmUser,
   loadingChannels, loadingDms, presence = {}, isAdmin = false,
   onCreateChannel, onEditChannel, onDeleteChannel,
 }: ChatSidebarProps) {

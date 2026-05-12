@@ -4,7 +4,6 @@
 // prevents accidentally mixing user IDs with channel IDs, message IDs, etc.
 
 import type { UserId, ChannelId, MessageId, RoleId, PermissionId, DmId } from "../types/ids";
-import type { Permission } from "../types/permission";
 
 export type Database = {
   public: {

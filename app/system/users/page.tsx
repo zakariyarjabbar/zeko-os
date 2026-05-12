@@ -19,7 +19,6 @@ import { getAppCache } from "@/lib/app-cache";
 import type { CachedUser as UserRow, CachedPermission as Permission, CachedRole as Role } from "@/lib/app-cache";
 
 // Alias for local use — shape is identical to CachedUserProfile
-type UserProfile = NonNullable<UserRow["profile"]>;
 
 const STATUS_DOT: Record<string, string> = {
   ONLINE:  "bg-zk-green shadow-glow-sm",

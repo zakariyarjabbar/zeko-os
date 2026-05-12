@@ -39,11 +39,7 @@ function fallbackProfile(session: { id: string; email: string; name: string; rol
   };
 }
 
-export default async function SystemLayout({
-  children: _children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function SystemLayout() {
   // ── Auth guard ──────────────────────────────────────────────
   const session = await getSession();
   if (!session) redirect("/login");
