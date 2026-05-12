@@ -199,7 +199,7 @@ function canonicalize(value: unknown): unknown {
     }, {});
 }
 
-function hashPayload(payload: Record<string, unknown>): string {
+export function auditEventHash(payload: Record<string, unknown>): string {
   return createHash("sha256")
     .update(JSON.stringify(canonicalize(payload)))
     .digest("hex");
@@ -255,7 +255,7 @@ export async function logSecurityAuditEvent(args: {
 
     await supabaseAdmin.from("security_audit_events").insert({
       ...payload,
-      event_hash: hashPayload(payload),
+      event_hash: auditEventHash(payload),
     });
   } catch (err) {
     // Audit failure should not make a successful security action fail.

@@ -78,6 +78,14 @@ export function conflict(message: string, req?: NextRequest) {
   return apiError("conflict", message, 409, { requestId: requestId(req) });
 }
 
+export function rateLimited(message: string, retryInSeconds: number, req?: NextRequest) {
+  return apiError("rate_limited", message, 429, {
+    requestId: requestId(req),
+    headers: { "Retry-After": String(retryInSeconds) },
+    details: { retryInSeconds },
+  });
+}
+
 export function internalError(req?: NextRequest) {
   return apiError("internal_error", "Internal server error.", 500, { requestId: requestId(req) });
 }
@@ -89,4 +97,3 @@ export async function requireSession(
   if (!session) return { ok: false, response: unauthorized(req) };
   return { ok: true, session };
 }
-

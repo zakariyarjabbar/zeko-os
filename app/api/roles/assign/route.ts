@@ -7,19 +7,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireFounder } from "@/lib/require-founder";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { z } from "zod";
+
+const AssignRolesSchema = z.object({
+  userId: z.string().uuid("Invalid user id."),
+  roleIds: z.array(z.string().uuid("Invalid role id.")).max(50).default([]),
+});
 
 export async function POST(req: NextRequest) {
   const guard = await requireFounder();
   if (!guard.ok) return guard.error as unknown as NextResponse;
 
-  let body: { userId?: string; roleIds?: string[] };
+  let body: unknown;
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: "Invalid body." }, { status: 400 }); }
 
-  const { userId, roleIds } = body;
-  if (!userId) return NextResponse.json({ error: "userId required." }, { status: 400 });
-
-  const ids = Array.isArray(roleIds) ? roleIds : [];
+  const parsed = AssignRolesSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message ?? "Invalid payload." },
+      { status: 400 },
+    );
+  }
+  const { userId, roleIds: ids } = parsed.data;
 
   // Delete all existing assignments for this user
   const { error: delError } = await supabaseAdmin

@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Search,
   ShieldAlert,
+  ShieldCheck,
   Terminal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -41,6 +42,20 @@ const ACTION_FILTERS = [
 
 const TARGET_FILTERS = ["all", "user", "role", "permission", "session", "channel", "message", "inbox_message"] as const;
 const SEVERITY_FILTERS = ["all", "info", "low", "medium", "high", "critical"] as const;
+
+interface AuditVerifyResponse {
+  checked: number;
+  hashed: number;
+  unhashed: number;
+  ok: boolean;
+  firstIssueId: string | null;
+  lastCheckedId: string | null;
+  issues: Array<{
+    id: string;
+    type: string;
+    message: string;
+  }>;
+}
 
 function timeStamp(iso: string): string {
   const d = new Date(iso);
@@ -120,6 +135,8 @@ export default function AuditPage() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyResult, setVerifyResult] = useState<AuditVerifyResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (mode: "replace" | "append" = "replace") => {
@@ -189,6 +206,23 @@ export default function AuditPage() {
     }
   }, [action, targetType, severity, actorId, targetId]);
 
+  const verifyHashChain = useCallback(async () => {
+    setVerifying(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/audit/verify", { cache: "no-store" });
+      if (!res.ok) {
+        setError(await readApiError(res));
+        return;
+      }
+      setVerifyResult(await res.json() as AuditVerifyResponse);
+    } catch {
+      setError("Hash verification failed. Please try again.");
+    } finally {
+      setVerifying(false);
+    }
+  }, []);
+
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return events;
@@ -222,6 +256,19 @@ export default function AuditPage() {
         <span className="font-sans text-sm font-semibold text-zk-white">Security Audit</span>
         <span className="font-mono text-[10px] text-zk-muted/40">{events.length} loaded</span>
         <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={verifyHashChain}
+            disabled={verifying}
+            className={cn(
+              "h-7 px-3 rounded-sm border font-sans text-xs flex items-center gap-2",
+              "border-zk-border bg-zk-surface/25 text-zk-slate hover:text-zk-green hover:border-zk-green/35 transition-colors",
+              "disabled:opacity-45 disabled:pointer-events-none",
+            )}
+          >
+            <ShieldCheck size={12} className={verifying ? "animate-pulse" : ""} />
+            Verify
+          </button>
           <button
             type="button"
             onClick={() => exportEvents("csv")}
@@ -259,6 +306,27 @@ export default function AuditPage() {
           </button>
         </div>
       </div>
+
+      {verifyResult && (
+        <div className={cn(
+          "shrink-0 px-4 py-2 border-b font-mono text-[11px] flex items-center gap-3",
+          verifyResult.ok
+            ? "border-zk-green/25 bg-zk-green/6 text-zk-green"
+            : "border-zk-red/30 bg-zk-red/6 text-zk-red",
+        )}>
+          <ShieldCheck size={12} />
+          <span>
+            hash chain {verifyResult.ok ? "valid" : "has issues"}:
+            {" "}{verifyResult.hashed} hashed, {verifyResult.unhashed} old unhashed, {verifyResult.checked} checked
+          </span>
+          {verifyResult.firstIssueId && (
+            <span className="text-zk-red">first issue #{verifyResult.firstIssueId}</span>
+          )}
+          <span className="ml-auto text-zk-muted/55">
+            last checked #{verifyResult.lastCheckedId ?? "none"}
+          </span>
+        </div>
+      )}
 
       <div className="shrink-0 px-4 py-3 border-b border-zk-border/30 bg-zk-bg space-y-2">
         <div className="flex items-center gap-3">

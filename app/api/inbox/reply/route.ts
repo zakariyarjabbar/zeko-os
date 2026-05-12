@@ -7,6 +7,15 @@ import { getEffectivePermissions } from "@/lib/effective-flags";
 import { canManageInbox } from "@/lib/permissions";
 import { asUserId } from "@/lib/types/ids";
 import { logSecurityAuditEvent } from "@/lib/audit";
+import { z } from "zod";
+
+const InboxReplySchema = z.object({
+  messageId: z.string().uuid("Invalid message id.").optional(),
+  to: z.string().trim().email("Invalid recipient email.").max(254),
+  subject: z.string().trim().min(1, "Subject is required.").max(180),
+  replyBody: z.string().trim().min(1, "Reply body is required.").max(8000),
+  originalName: z.string().trim().max(120).optional(),
+});
 
 function escapeHtml(value: string): string {
   return value
@@ -26,14 +35,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden. inbox-manager permission required." }, { status: 403 });
   }
 
-  let body: { messageId?: string; to?: string; subject?: string; replyBody?: string; originalName?: string };
+  let body: unknown;
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: "Invalid body." }, { status: 400 }); }
 
-  const { messageId, to, subject, replyBody, originalName } = body;
-  if (!to || !subject || !replyBody) {
-    return NextResponse.json({ error: "to, subject, and replyBody are required." }, { status: 400 });
+  const parsed = InboxReplySchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message ?? "Invalid payload." },
+      { status: 400 },
+    );
   }
+  const { messageId, to, subject, replyBody, originalName } = parsed.data;
 
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
